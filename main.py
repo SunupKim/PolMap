@@ -1,52 +1,74 @@
 # main.py
 
-from news_cluster import NewsCluster
-from archive_repository import ArchiveRepository
-from pipeline import PoliticalNewsPipeline
+# 우리가 만든 전문 부품들 임포트
+from api.naver_news_client import NaverNewsClient
+from api.news_repository import NewsRepository
+from processors.news_filter import NewsFilter
+from processors.news_scraper import NewsScraper
+from processors.news_cluster import NewsCluster
+from config import TITLE_THRESHOLD, CONTENT_THRESHOLD, NAVER_ID, NAVER_SECRET
 
-# 상수는 프로젝트 구조에 맞게 설정
-ARCHIVE_PATH = "outputs/archive/news_archive.csv"
-SIMILARITY_THRESHOLD = 0.6 # 제목 유사도 기준 (0.6~0.8 권장)
+def run_news_pipeline(keyword, total_count):
+    print(f"\n{'='*20} [{keyword}] 파이프라인 가동 {'='*20}")
 
-# config/__init__.py 역할을 대신하여 환경변수 로드
-# load_dotenv()
+    # 1. 초기화 (각 객체에게 필요한 설정 주입)
+    client = NaverNewsClient(NAVER_ID, NAVER_SECRET)
+
+    repo = NewsRepository(keyword) # 키워드별 독립 저장소
+    nf = NewsFilter(keyword)       # 키워드별 필터 로그 관리
+    ns = NewsScraper(delay=0.1)    # 크롤러    
+    cluster_tool = NewsCluster(title_threshold=TITLE_THRESHOLD, content_threshold=CONTENT_THRESHOLD)
+
+    # --- STEP 1 & 2: 수집 및 원본 아카이빙 (증분 체크) ---
+    
+    # NaverNewsClient는 내부에서 NewsArticleModel을 통해 news_id가 생성되어 반환됨
+    
+    raw_items = client.fetch_news_batch(keyword, total_count=total_count)
+    df_new = repo.save_raw_and_get_new(raw_items)
+    
+    if df_new.empty:
+        print(f">>> [{keyword}] 새로운 기사가 없습니다. 공정을 종료합니다.")
+        return
+
+    print(f"> 신규 기사 {len(df_new)}건 발견. 정밀 공정 시작...")
+
+    # --- STEP 3: 사전 필터링 (제목/Snippet 기반) ---    
+    df_step3 = nf.apply_pre_filter(df_new)
+
+    # --- STEP 4: 본문 크롤링 ---    
+    df_step4 = ns.fetch_contents(df_step3)
+
+    # --- STEP 5: 사후 필터링 (본문 품질/말투 기반) ---    
+    df_step5 = nf.apply_post_filter(df_step4)
+
+    # STEP 6: 지능형 클러스터링 (유사 기사 그룹화)    
+    df_clustered, stats = cluster_tool.process(df_step5, keyword)    
+
+    # --- STEP 7: 최종 분석용 저장소에 병합 ---
+    # 클러스터링 결과 중 '대표 기사'만 골라서 selected_archive.csv에 누적
+    if not df_clustered.empty:
+        df_final = df_clustered[df_clustered["is_canonical"] == True].copy()
+        added_cnt = repo.merge_final_incremental(df_final)
+        print(f"[최종 완료] {keyword}: 신규 {added_cnt}건이 분석 저장소에 추가됨.")
+    else:
+        print(f"[최종 완료] {keyword}: 모든 필터링 결과 남은 기사가 없습니다.")
 
 if __name__ == "__main__":
-    # 프로젝트 초기화
-    pipeline = PoliticalNewsPipeline()
-    archive_repo = ArchiveRepository(ARCHIVE_PATH)
-    cluster = NewsCluster(SIMILARITY_THRESHOLD)
+    # 분석 대상 키워드 리스트
+    # target_keywords = ["이재명", "한동훈", "더불어민주당", "국민의힘", "개혁신당"]    
+    # target_keywords = ["한동훈"]
     
-    loop_count = 1
-    #keywords = ["이재명", "한동훈", "더불어민주당", "국민의힘", "개혁신당"]    
-    #keywords = ["한동훈"]
-    keywords = ["우원식"]
+    # target_keywords = ["우원식", "이재명", "한동훈"]
+    target_keywords = ["개혁신당", "김동연", "조국신당"]
 
-    # 1. Raw 데이터 확보 및 물리적 필터링 (개별 기사 단위)
-    df_step1 = pipeline.step1_collect_news(keywords, loop_count)
-    df_step2 = pipeline.step2_filter_and_id(df_step1, archive_repo)
-    df_step3 = pipeline.step3_rbp_filtering(df_step2)
-    df_step4 = pipeline.step4_extract_content(df_step3)
-    df_step5 = pipeline.step5_final_filtering(df_step4)
+    total_count = 30  # 키워드 1개당 몇 개 뉴스까지 받을지 설정
     
-    # 2. 지능형 중복 제거 (그룹 단위)
-    # 이제 이 데이터는 "이미 아카이브에 없고, 본문도 멀쩡한" 깨끗한 기사들입니다.
-    print("\n> [STEP 6] 유사도 그룹화 및 아카이브 처리 시작...")
-    df_processed, stats = cluster.process(df_step5)
+    for kw in target_keywords:
+        try:
+            run_news_pipeline(kw, total_count)
+        except Exception as e:
+            print(f"!!! [{kw}] 파이프라인 실행 중 오류 발생: {e}")
 
-    # --- 최종 결과 저장 ---
-    if not df_processed.empty and "is_canonical" in df_processed.columns:
-        # is_canonical인 기사들만 골라서 아카이브에 병합
-        df_final_to_save = df_processed[df_processed["is_canonical"] == True].copy()
-        added_count = archive_repo.merge_incremental(df_final_to_save)
-    else:
-        added_count = 0
-        print("> [공지] 처리할 신규 기사가 없어 저장을 스킵합니다.")
-    
-    # --- 결과 출력 ---
-    print("-" * 30)
-    print(f"최종 처리 완료 요약:")
-    print(f"- 수집된 원본: {stats.get('fetched', 0)}건")
-    print(f"- 유사 그룹 수: {stats.get('similar_groups', 0)}개")
-    print(f"- 최종 아카이브 추가: {added_count}건")
-    print("-" * 30)
+    print("\n" + "="*50)
+    print("모든 키워드에 대한 수집 및 정제 공정이 완료되었습니다.")
+    print("="*50)
