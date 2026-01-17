@@ -1,9 +1,8 @@
 # news_filter.py
 
-import os
+import os, re
 import pandas as pd
 from datetime import datetime
-
 
 class NewsFilter:
     """
@@ -11,12 +10,28 @@ class NewsFilter:
     - Step 3 (수집 직후 필터링)와 Step 5 (본문 수집 후 필터링) 로직 담당
     - 필터링되어 탈락한 기사들을 별도 로그 파일로 저장
     """
+    
+    def __init__(
+        self, 
+        keyword: str, 
+        is_keyword_required: bool = False, 
+        exclude_words_str: str = None, 
+        base_path: str = "outputs"
+        ):
 
-    def __init__(self, keyword: str, base_path: str = "outputs"):
         self.keyword = keyword
-        # 필터링 로그 저장 경로 (예: outputs/우원식/filtered_logs/)
+        self.is_keyword_required = is_keyword_required # 타입 주입
         self.log_path = os.path.join(base_path, keyword, "filtered_logs")
         os.makedirs(self.log_path, exist_ok=True)
+
+        # 1. 외부에서 주입된 콤마 구분 문자열을 정규표현식 패턴으로 변환
+        if exclude_words_str:
+            # 콤마로 분리 -> 앞뒤 공백 제거 -> [포토] 등을 안전하게 처리(re.escape) -> |(OR)로 연결
+            words = [word.strip() for word in exclude_words_str.split(",") if word.strip()]
+            self.exclude_pattern = "|".join([re.escape(word) for word in words])
+        else:
+            # 기본값 설정
+            self.exclude_pattern = ""     
 
     def _save_log(self, df: pd.DataFrame, filename: str):
         """탈락한 기사들을 추적하기 위해 저장 (파일명에 날짜시간 추가)"""
@@ -49,14 +64,20 @@ class NewsFilter:
         naver_mask = df['link'].str.contains("news.naver.com", na=False)
         self._save_log(df[~naver_mask], "step3_non_naver_links.csv")
         df = df[naver_mask].copy()
+        
+        # 2. 제목 자체에도 검색 키워드가 포함되어 있는지 확인
+        if self.is_keyword_required:            
+            keyword_mask = df['title'].str.contains(self.keyword, case=False, na=False)
+            self._save_log(df[~keyword_mask], "step3_missing_keyword_in_title.csv")
+            df = df[keyword_mask].copy()
 
-        # 2. 제목 패턴 필터링 ([포토], [사진] 등)
-        exclude_patterns = r'\[포토\]|\[헤드라인\]|\[사진\]|\[영상\]|\[화보\]|\[그래픽\]|\[속보\]'
-        pattern_mask = df['title'].str.contains(exclude_patterns, case=False, na=False)
-        self._save_log(df[pattern_mask], "step3_exclude_pattern.csv")
-        df = df[~pattern_mask].copy()
-
-        # 3. Snippet(description) 길이 필터링 (20자 미만)
+        # 3. 제목 패턴 필터링 ([포토], [사진] 등)
+        if self.exclude_pattern:
+            pattern_mask = df['title'].str.contains(self.exclude_pattern, case=False, na=False, regex=True)
+            self._save_log(df[pattern_mask], "step3_exclude_pattern.csv")
+            df = df[~pattern_mask].copy()
+        
+        # 4. Snippet(description) 길이 필터링 (30자 미만)
         short_mask = df['description'].str.len() < 20
         self._save_log(df[short_mask], "step3_short_snippet.csv")
         df = df[~short_mask].copy()
@@ -89,8 +110,7 @@ class NewsFilter:
         long_mask = df['content'].str.len() > 5000
         
         # 로그 기록 (어떤 기사가 너무 짧아서 탈락했는지 추적)
-        if not df[short_mask].empty:
-            # df[long_mask] -> df[short_mask]로 수정
+        if not df[short_mask].empty:            
             self._save_log(df[short_mask], "step5_too_short_content.csv")
             print(f"[Filter] step5 너무 짧은 기사(200자 미만) {len(df[short_mask])}건 발견 및 제외")
         

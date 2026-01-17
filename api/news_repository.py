@@ -35,80 +35,47 @@ class NewsRepository:
             return pd.DataFrame()
 
         df_fetched = pd.DataFrame(fetched_items)
-
-        # # news_id를 link 바탕으로 생성
-        # if 'news_id' not in df_fetched.columns:
-        #     df_fetched['news_id'] = df_fetched['link'].apply(
-        #         lambda x: hashlib.md5(x.encode()).hexdigest()[:12]
-        #     )
         
-        # 기존 원본 더미가 없는 경우
+        # 1. 기존 데이터가 없으면 바로 저장하고 반환 (코드 압축)
         if not os.path.exists(self.raw_archive_path):
-            df_sorted = self._sort(df_fetched)
-            df_sorted.to_csv(self.raw_archive_path, index=False, encoding='utf-8-sig')
-            return df_sorted
+            self._finalize_and_save(df_fetched, self.raw_archive_path)
+            return df_fetched
 
-        # 기존 데이터 로드 (중복 체크용)
-        df_old = pd.read_csv(self.raw_archive_path).head(self.lookback_limit)
-        
-        # 'link' 기준 중복 제거하여 새로운 기사만 필터링
+        # 2. 기존 데이터가 있는 경우: 증분 체크 및 병합
+        df_old = pd.read_csv(self.raw_archive_path, usecols=["link"]).head(self.lookback_limit)
         df_new_only = df_fetched[~df_fetched["link"].isin(df_old["link"])].copy()
 
+        # 전체 로드 후 병합 및 정렬 (가장 안전한 방식)
         if not df_new_only.empty:
-            # 전체 로드 후 병합 및 정렬 (가장 안전한 방식)
             full_raw = pd.read_csv(self.raw_archive_path)
             updated_raw = pd.concat([df_new_only, full_raw], ignore_index=True)
-            updated_raw = self._sort(updated_raw)
-            updated_raw.to_csv(self.raw_archive_path, index=False, encoding='utf-8-sig')
-            
+            self._finalize_and_save(updated_raw, self.raw_archive_path)
+                        
         return df_new_only
 
     # ---------------------------------------------------------
     # 2. Final Archive 관리 (분석용 뉴스 누적)
     # ---------------------------------------------------------
     def merge_final_incremental(self, df_final: pd.DataFrame) -> int:
-        """
-        필터링/스크래핑이 완료된 최종 데이터를 분석용 더미에 병합
-        반환값: 실제로 추가된 기사 수
-        """
-        if df_final.empty:
-            return 0
+        if df_final.empty: return 0
 
-        # 신규 파일 생성 시
-        if not os.path.exists(self.selected_archive_path):
-            df_sorted = self._sort(df_final)
-            df_ordered = self._reorder_columns(df_sorted) # 순서 재배치 추가
-            df_ordered.to_csv(self.selected_archive_path, index=False, encoding='utf-8-sig')
-            return len(df_final)
+        # 기존 데이터 로드 및 증분 필터링
+        if os.path.exists(self.selected_archive_path):
+            df_old = pd.read_csv(self.selected_archive_path)
+            incremental = df_final[~df_final["link"].isin(df_old.head(self.lookback_limit)["link"])].copy()
+            if incremental.empty: return 0
+            df_total = pd.concat([incremental, df_old], ignore_index=True)
+        else:
+            df_total = df_final
+            incremental = df_final
 
-        # 기존 파일과 병합 시
-        recent_final = pd.read_csv(self.selected_archive_path).head(self.lookback_limit)
-        incremental = df_final[~df_final["link"].isin(recent_final["link"])].copy()
-
-        if incremental.empty:
-            return 0
-
-        full_final = pd.read_csv(self.selected_archive_path)
-        updated_final = pd.concat([incremental, full_final], ignore_index=True)
-        updated_final = self._sort(updated_final)
-        
-        # 저장 직전에 순서 재배치
-        updated_final = self._reorder_columns(updated_final) # 순서 재배치 추가
-        
-        updated_final.to_csv(self.selected_archive_path, index=False, encoding='utf-8-sig')
+        # 공통 저장 로직 호출
+        self._finalize_and_save(df_total, self.selected_archive_path, reorder=True)
         return len(incremental)
 
     # ---------------------------------------------------------
     # 3. 유틸리티 메서드
     # ---------------------------------------------------------
-    def _sort(self, df: pd.DataFrame) -> pd.DataFrame:
-        """날짜 기준 역순 정렬"""
-        if df.empty: return df
-        df = df.copy()
-        df["pubDate_dt"] = pd.to_datetime(df["pubDate"], errors="coerce", utc=True)
-        df = df.sort_values(by="pubDate_dt", ascending=False)
-        return df.drop(columns=["pubDate_dt"])
-
     def get_last_pubdate(self, target='raw'):
         """저장된 기사 중 가장 최신 날짜 반환 (raw 또는 final 선택 가능)"""
         path = self.raw_archive_path if target == 'raw' else self.selected_archive_path
@@ -130,8 +97,12 @@ class NewsRepository:
         """분석 편의를 위해 컬럼 순서 재배치"""
         # 디버그 로그와 동일한 핵심 컬럼을 앞으로 배치
         desired_order = [
-            "news_id", "title", "is_canonical", "title_group_id", "content_group_id", "replaced_by",
-            "search_keyword", "pubDate", "content", "link", "originallink", "description", "collected_at"
+            #"news_id", "title", "is_canonical", "title_group_id", "content_group_id", "replaced_by",
+            #"search_keyword", "pubDate", "content", "link", "originallink", "description", "collected_at"
+
+            # 아래는 내 편의에 따라 조정
+            # 불필요한 칼럼들 삭제
+            "news_id", "title", "pubDate", "link", "originallink", "description", "collected_at", "content"
         ]
         # 실제 존재하는 컬럼만 골라내기 (KeyError 방지)
         existing_cols = [col for col in desired_order if col in df.columns]
@@ -139,3 +110,18 @@ class NewsRepository:
         remaining_cols = [col for col in df.columns if col not in existing_cols]
         
         return df[existing_cols + remaining_cols]
+    
+    def _finalize_and_save(self, df: pd.DataFrame, path: str, reorder: bool = False):
+        """정렬, (선택적) 순서 재배치 후 CSV 저장"""
+        df = self._sort(df)
+        if reorder:
+            df = self._reorder_columns(df)
+        df.to_csv(path, index=False, encoding='utf-8-sig')
+
+    def _sort(self, df: pd.DataFrame) -> pd.DataFrame:
+        """날짜 기준 역순 정렬"""
+        if df.empty: return df
+        df = df.copy()
+        # 원본 컬럼 훼손 없이 정렬용 임시 컬럼 생성
+        temp_dt = pd.to_datetime(df["pubDate"], errors="coerce", utc=True)
+        return df.iloc[temp_dt.argsort()[::-1]] # drop 없이 빠르게 정렬
