@@ -19,6 +19,8 @@ Step 7,본문 유사도 정밀 체크 (C-번호),NewsCluster._refine_by_body_sim
 Step 8,대표 기사 선정 및 치환,NewsCluster._mark_canonical_articles,"is_canonical, replaced_by"
 Step 9,결과물 병합 및 로그 저장,NewsRepository.merge_final_incrementalNewsCluster._save_similarity_debug_log,컬럼 순서 재배치 및 저장
 Step 10,[추가] 중복 그룹 전용 검토,NewsCluster._save_grouped_only_log,2개 이상 묶인 그룹만 추출
+Step 11,실행 통계 로그 강화, scheduler.py / save_log_to_csv, 사이클별 구분줄 삽입 및 누적 수집량/수집 효율(Ratio) 계산 
+Step 12, [신규] 글로벌 뉴스 통합 및 중복 제거, aggregator.py / run_aggregation, 모든 키워드 폴더 통합 및 link 기준 글로벌 중복(Global Canonical) 판별
 
 20250117
 검색어별로 뉴스 수집을 중복과 누락을 최소화해 스케줄링 하는 코드를 작성했다. 중복과 누락에 대한 완성도는 아직 확인을 못 했지만 일단 넘어가자.
