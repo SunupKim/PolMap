@@ -17,7 +17,7 @@ class NewsScraper:
     def fetch_contents(self, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty: return df
         
-        print(f"[Scraper] 총 {len(df)}건의 기사 본문 수집 시작...")
+        #print(f"[Scraper] 총 {len(df)}건의 기사 본문 수집 시작...")
         contents = []
         
         for _, row in tqdm(df.iterrows(), total=len(df), desc="Scraping News"):

@@ -46,6 +46,9 @@ class NewsCluster:
         # [해석 주의] cluster_id의 유니크 개수는 곧 대표 기사(is_canonical)의 개수와 일치함
         similar_groups = df["cluster_id"].nunique() if "cluster_id" in df.columns else 0
         canonical_count = int(df["is_canonical"].sum()) if "is_canonical" in df.columns else 0
+        
+        print(f"[Cluster] 제목 및 내용 유사도 검사 완료 ----------> (삭제: {fetched_count - canonical_count}건)")
+
 
         stats = {
             "fetched": fetched_count,
@@ -127,4 +130,4 @@ class NewsCluster:
         os.makedirs(log_dir, exist_ok=True)
         path = os.path.join(log_dir, f"{timestamp}.csv")
         debug_df.to_csv(path, index=False, encoding='utf-8-sig')
-        print(f"[Log] 유사도 분석 상세 로그 생성 완료: {path}")
+        #print(f"[Log] 유사도 분석 상세 로그 생성 완료: {path}")

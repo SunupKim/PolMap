@@ -43,7 +43,7 @@ SEARCH_KEYWORDS = [
 # "국회" "대통령??"
 
 # 검색어당 수집할 뉴스 개수, 1000개가 MAX
-TOTAL_FETCH_COUNT = 300
+TOTAL_FETCH_COUNT = 30
 
 # 3분에 한 번 하려면 FETCH_PER_HOURS = 1/20
 FETCH_PER_HOURS = 3

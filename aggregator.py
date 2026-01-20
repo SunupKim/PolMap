@@ -1,8 +1,21 @@
+# aggregator.py가 하는 일
+# 입력
+# - 각 키워드 폴더의 selected_archive.csv
+# - 이미 클러스터링 + canonical 선정까지 끝난 결과
+# 처리
+# - 모든 키워드 결과를 하나로 concat
+# - link 컬럼 기준으로 duplicated() 수행
+# - 처음 등장한 link만 글로벌 canonical
+# - 나머지는 global_replaced_by로 매핑
+# 출력
+# - total_news_archive.csv → link 기준으로 중복 없는 기사 집합
+# - total_news_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
+
 import os
 import pandas as pd
 import time
-from datetime import datetime
 from config import SEARCH_KEYWORDS, AGGREGATE_PER_HOURS
+from datetime import datetime
 
 # 설정 경로
 OUTPUT_ROOT = "outputs"
@@ -59,13 +72,43 @@ def run_aggregation():
         duplicate_count = len(df_duplicates)
     else:
         duplicate_count = 0
+
+    # 4-1. 글로벌 중복 제거 이력 저장
+    if not df_duplicates.empty:
+        history_df = df_duplicates[[
+            'source_keyword',
+            'news_id',
+            'link',
+            'global_replaced_by'
+        ]].copy()
+
+        history_df['execute_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        os.makedirs(os.path.dirname(DUPLICATE_HISTORY_PATH), exist_ok=True)
+
+        is_new = not os.path.exists(DUPLICATE_HISTORY_PATH)
+        history_df.to_csv(
+            DUPLICATE_HISTORY_PATH,
+            mode='a',
+            header=is_new,
+            index=False,
+            encoding='utf-8-sig'
+        )        
     
     # 5. 최종 데이터 합치기 (메타 파일용)
     df_all_processed = pd.concat([df_canonical, df_duplicates], ignore_index=True)
 
-    # (중략: 6번 저장 과정)
+    # 6. 메타 데이터 생성
+    meta_columns = ['news_id', 'link', 'source_keyword', 'title', 'pubDate', 'cluster_id', 'title_id', 'body_id', 'is_global_canonical', 'global_replaced_by']
+    actual_meta_cols = [c for c in meta_columns if c in df_all_processed.columns]
+    df_meta_final = df_all_processed[actual_meta_cols].copy()
 
-    # 7. 출력 (사용자님이 원하시는 정확한 수치 표시)
+    # 7. 저장    
+    os.makedirs(os.path.dirname(TOTAL_ARCHIVE_PATH), exist_ok=True)
+    df_canonical.to_csv(TOTAL_ARCHIVE_PATH, index=False, encoding='utf-8-sig')
+    df_meta_final.to_csv(TOTAL_META_PATH, index=False, encoding='utf-8-sig')
+
+    # 8. 출력 (사용자님이 원하시는 정확한 수치 표시)
     print(f">>> 통합 완료: 전체 {len(df_total)}건 중 {len(df_canonical)}건 선별")
     print(f">>> 중복으로 {duplicate_count}건이 global_replaced_by로 매핑되었습니다.")
 

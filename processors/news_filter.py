@@ -89,7 +89,8 @@ class NewsFilter:
         self._save_log(df[dup_mask], "step3_duplicate_title.csv")
         df = df[~dup_mask].drop(columns=['temp_press']).copy()
 
-        print(f"[Filter] Pre-filtering 완료: {before_cnt}건 -> {len(df)}건 (삭제: {before_cnt - len(df)}건)")
+        print(f"[Filter] Pre-filtering 완료: {before_cnt}건 -> {len(df)}건 ----------> (삭제: {before_cnt - len(df)}건)")
+        #print(f"[Filter] Pre-filtering 완료: {before_cnt}건 -> {len(df)}건")
         return df
 
     def apply_post_filter(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -127,5 +128,6 @@ class NewsFilter:
         # self._save_log(df[speech_mask], "step5_speech_style.csv")
         # df = df[~speech_mask].copy()
 
-        print(f"[Filter] Post-filtering 완료: {before_cnt}건 -> {len(df)}건 (삭제: {before_cnt - len(df)}건)")
+        print(f"[Filter] Post-filtering 완료: {before_cnt}건 -> {len(df)}건 ---------> (삭제: {before_cnt - len(df)}건)")
+        #print(f"[Filter] Post-filtering 완료: {before_cnt}건 -> {len(df)}건")
         return df

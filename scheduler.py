@@ -1,3 +1,5 @@
+# scheduler.py
+
 import time
 import os
 import pandas as pd
@@ -6,7 +8,6 @@ from main import run_news_pipeline
 from config import SEARCH_KEYWORDS, TOTAL_FETCH_COUNT, FETCH_PER_HOURS
 
 # 통계 로그를 저장할 파일 경로
-# LOG_FILE = "outputs/execution_stats_history.csv"
 EXECUTION_LOG_PATH = "outputs/execution_log.csv"
 
 def save_log_to_csv(stats_list):

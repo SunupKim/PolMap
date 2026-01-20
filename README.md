@@ -25,3 +25,16 @@ Step 12, [신규] 글로벌 뉴스 통합 및 중복 제거, aggregator.py / run
 20250117
 검색어별로 뉴스 수집을 중복과 누락을 최소화해 스케줄링 하는 코드를 작성했다. 중복과 누락에 대한 완성도는 아직 확인을 못 했지만 일단 넘어가자.
 다음 단계는 검색어별로 수집된 selected_archive.csv를 중복 없이 합치는 작업이다.
+
+💡 aggregator.py가 하는 일
+입력
+- 각 키워드 폴더의 selected_archive.csv
+- 이미 클러스터링 + canonical 선정까지 끝난 결과
+처리
+- 모든 키워드 결과를 하나로 concat
+- link 컬럼 기준으로 duplicated() 수행
+- 처음 등장한 link만 글로벌 canonical
+- 나머지는 global_replaced_by로 매핑
+출력
+- total_news_archive.csv → link 기준으로 중복 없는 기사 집합
+- total_news_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
