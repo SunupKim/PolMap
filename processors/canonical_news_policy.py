@@ -1,6 +1,7 @@
 # canonical_news_policy.py
 # 자체 중복기사를 셀렉팅하는 정책이다.
-
+# 피곤하다
+      
 from datetime import datetime
 import pandas as pd
 
@@ -27,7 +28,7 @@ class CanonicalNewsPolicy:
             df["pubDate"],
             format="%Y-%m-%d %H:%M:%S",
             errors="coerce"
-            )
+            ) 
 
         agency_df = df[df["is_agency"]]
 
@@ -40,4 +41,4 @@ class CanonicalNewsPolicy:
             return agency_df.sort_values("pubDate_dt", ascending=True).iloc[0]
 
         # 3) 통신사 기사 0개 → 전체 중 가장 오래된 기사
-        return df.sort_values("pubDate_dt", ascending=True).iloc[0]
+        return df.sort_values("pubDate_dt", ascending=True).iloc[0]  

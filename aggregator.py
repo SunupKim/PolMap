@@ -10,6 +10,7 @@
 # 출력
 # - total_news_archive.csv → link 기준으로 중복 없는 기사 집합
 # - total_news_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
+# 가상환경에서는 python aggregator.py 로 실행
 
 import os
 import pandas as pd
@@ -28,7 +29,7 @@ def run_aggregation():
     all_dfs = []
 
     # 1. 파일 로드
-    for kw, _ in SEARCH_KEYWORDS:
+    for kw, _, _ in SEARCH_KEYWORDS:
         file_path = os.path.join(OUTPUT_ROOT, kw, "selected_archive.csv")
         if os.path.exists(file_path):
             try:
