@@ -1,5 +1,10 @@
 .venv/
+venv/
+env/
 __pycache__/
 .env
 *.log
 outputs/
+*.egg-info/
+build/
+dist/
