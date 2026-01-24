@@ -19,7 +19,7 @@ from config import SEARCH_KEYWORDS, AGGREGATE_PER_HOURS
 from datetime import datetime
 
 # 설정 경로
-OUTPUT_ROOT = "outputs"
+OUTPUT_ROOT = "outputs/"
 TOTAL_ARCHIVE_PATH = os.path.join(OUTPUT_ROOT, "final/total_news_archive.csv")
 TOTAL_META_PATH = os.path.join(OUTPUT_ROOT, "final/total_news_archive_meta.csv")
 DUPLICATE_HISTORY_PATH = os.path.join(OUTPUT_ROOT, "final/duplicate_removal_history.csv")

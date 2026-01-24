@@ -124,7 +124,8 @@ Gemini 2.5 Flash용 시스템 프롬프트이다.
 TITLE_THRESHOLD = 0.20 # 제목 유사도 20% 초과 시 동일 기사 그룹으로 간주한다.
 CONTENT_THRESHOLD = 0.15 # 본문 유사도 15% 초과 시 동일 기사 그룹으로 간주한다.
 
-이 두 임계값은 OR 조건으로 결합된다. 즉, 제목 또는 본문 중 하나라도 임계값을 넘으면 동일 클러스터로 병합되며, 최초 기사 하나만 대표 기사로 남는다.
+이 두 임계값은 OR 조건으로 결합된다. 즉, 제목 또는 본문 중 하나라도 임계값을 넘으면 동일 클러스터로 병합되며, 최초 기사 하나만 대표 기사로 남는다. 제목만 살짝 고친 우라까이 기사를 잡아내기 위해서다. 
+만약, AND로 결합하면, 제목과 본문 모두가 임계값을 넘어야 동일 클러스터로 병합된다. 이러면 본문이 짧은 기사들은 유사도가 낮게 나오는 경향이 있다. 한국 언론의 기사 중에 제목이 비슷하지만 본문이 전혀 다른 기사는 극히 드물다. 그런 기사는 있어도 포기해도 된다. 
 
 ### 2. Group ID 의미
 title_group_id(T-1, T-2 등)는 제목 유사도 기준의 임시 그룹이다.
@@ -197,13 +198,12 @@ python scripts/rag_test_e5.py
 - execution_log.csv: 키워드별 실행 통계(new_raw, final_added, timestamp)
 - <keyword>/similarity_logs/YYYYMMDD_HHMM.csv: 상세 클러스터 할당 결과
 - <keyword>/filtered_logs/stepN_*.csv: 필터 단계별 기사 제외 사유
-- .github/outputs/last_executed.json: 키워드별 마지막 실행 시각(여기가 맞나???)
+- outputs/last_executed.json: 키워드별 마지막 실행 시각
 
 ## 연동 지점 및 외부 의존성
 
 ### API
 - 네이버 뉴스 검색 API: .env에 NAVER_ID와 NAVER_SECRET이 필요하다.
-
 - Google Gemini 2.5 Flash: llm/issue_labeler.py에서 프로파일링에 사용되며 GEMINI_API_KEY가 필요하다.
 
 ### 라이브러리
