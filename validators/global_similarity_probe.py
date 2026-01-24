@@ -156,10 +156,9 @@ if __name__ == "__main__":
     probe = GlobalSimilarityProbe(
         # title_threshold=1,
         # body_threshold=1,
-        title_threshold=0.3,
-        body_threshold=0.4,
-        #union_mode="OR"  # 또는 "AND"
-        union_mode="AND"
+        title_threshold=0.2,
+        body_threshold=0.3,
+        union_mode="OR"  # 또는 "AND"
     )
 
     probe.run(df)

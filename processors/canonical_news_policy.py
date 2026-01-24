@@ -25,9 +25,9 @@ class CanonicalNewsPolicy:
         df["is_agency"] = df["originallink"].apply(is_agency)
         df["pubDate_dt"] = pd.to_datetime(
             df["pubDate"],
-            errors="coerce",
-            utc=True
-        )
+            format="%Y-%m-%d %H:%M:%S",
+            errors="coerce"
+            )
 
         agency_df = df[df["is_agency"]]
 

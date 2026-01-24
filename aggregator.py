@@ -28,7 +28,7 @@ def run_aggregation():
     all_dfs = []
 
     # 1. 파일 로드
-    for kw, _, _ in SEARCH_KEYWORDS:
+    for kw, _ in SEARCH_KEYWORDS:
         file_path = os.path.join(OUTPUT_ROOT, kw, "selected_archive.csv")
         if os.path.exists(file_path):
             try:

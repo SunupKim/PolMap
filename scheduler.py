@@ -1,28 +1,14 @@
 # scheduler.py
 
-import json
 import time
 import os
 import pandas as pd
 from datetime import datetime
 from main import run_news_pipeline
-from config import SEARCH_KEYWORDS, TOTAL_FETCH_COUNT
-
+from config import SEARCH_KEYWORDS, TOTAL_FETCH_COUNT, FETCH_PER_HOURS
 
 # 통계 로그를 저장할 파일 경로
 EXECUTION_LOG_PATH = "outputs/execution_log.csv"
-LAST_EXECUTED_PATH = "outputs/last_executed.json"
-
-def load_last_executed():
-    if not os.path.exists(LAST_EXECUTED_PATH):
-        return {}
-    with open(LAST_EXECUTED_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def save_last_executed(data):
-    os.makedirs(os.path.dirname(LAST_EXECUTED_PATH), exist_ok=True)
-    with open(LAST_EXECUTED_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def save_log_to_csv(stats_list):
     """실행 결과를 누적 로그 파일에 저장"""
@@ -83,30 +69,13 @@ def save_log_to_csv(stats_list):
 def job():
     """전체 키워드 순회 및 수집 작업"""
     print(f"\n{'>'*10} 정기 수집 프로세스 시작: {datetime.now()} {'>'*10}")
-    now = datetime.now()
-
-    last_executed = load_last_executed()
-    updated_last_executed = dict(last_executed)
-
     all_stats = []
 
-    for kw, is_required, fetch_per_hours in SEARCH_KEYWORDS:
-
-        # 키워드별 실행 주기 체크
-        last_time_str = last_executed.get(kw)
-
-        if last_time_str:
-            last_time = datetime.strptime(last_time_str, "%Y-%m-%d %H:%M:%S")
-            elapsed_hours = (now - last_time).total_seconds() / 3600
-            if elapsed_hours < fetch_per_hours:
-                continue
-
+    for kw, is_required in SEARCH_KEYWORDS:
         try:
             stats = run_news_pipeline(kw, TOTAL_FETCH_COUNT, is_required)
             if stats:
                 all_stats.append(stats)
-                updated_last_executed[kw] = now.strftime("%Y-%m-%d %H:%M:%S")
-
         except Exception as e:
             print(f"!!! [{kw}] 실행 중 오류: {e}")
             all_stats.append({
@@ -114,17 +83,20 @@ def job():
                 "new_raw": 0,         # new_raw_count -> new_raw로 변경
                 "final_added": 0,     # final_added_count -> final_added로 변경
                 "status": f"error: {str(e)}"
-            })           
+            })
+            
     
     if all_stats:
         save_log_to_csv(all_stats)
-        save_last_executed(updated_last_executed)
-
     print(f"{'<'*10} 정기 수집 완료 및 로그 기록 성공 {'<'*10}\n")
 
 if __name__ == "__main__":
-        
-    INTERVAL_SECONDS = 60 * 60
+    
+    INTERVAL_SECONDS = FETCH_PER_HOURS * 60 * 60
+
+    print(f"스케줄러가 가동되었습니다. ({FETCH_PER_HOURS}시간 간격)")
+    
     while True:
-        job()
+        job() # 1회 실행
+        print(f"다음 실행까지 {FETCH_PER_HOURS}시간 동안 대기합니다...")
         time.sleep(INTERVAL_SECONDS)

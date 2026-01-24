@@ -62,7 +62,7 @@ def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool)
     
 if __name__ == "__main__":
     
-    for kw, is_required, _ in SEARCH_KEYWORDS:
+    for kw, is_required in SEARCH_KEYWORDS:
         try:
             # 파이프라인 함수에 is_required 옵션을 함께 전달
             run_news_pipeline(kw, TOTAL_FETCH_COUNT, is_required)
