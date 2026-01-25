@@ -3,13 +3,13 @@
 import pandas as pd
 import sys
 
-TOTAL_ARCHIVE_PATH = "outputs/final/total_news_archive.csv"
+from config import CANONICAL_ARCHIVE_PATH, DUPLICATE_HISTORY_PATH
 
 def main():
     try:
-        df = pd.read_csv(TOTAL_ARCHIVE_PATH)
+        df = pd.read_csv(CANONICAL_ARCHIVE_PATH)
     except FileNotFoundError:
-        print(f"파일이 없습니다: {TOTAL_ARCHIVE_PATH}")
+        print(f"파일이 없습니다: {CANONICAL_ARCHIVE_PATH}")
         sys.exit(1)
 
     if 'link' not in df.columns:
@@ -41,7 +41,6 @@ def main():
     print("중복 상세 파일 저장됨: outputs/final/total_news_archive_link_duplicates.csv")
 
     sys.exit(2)
-
 
 if __name__ == "__main__":
     main()

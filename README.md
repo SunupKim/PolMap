@@ -36,5 +36,5 @@ Step 12, [신규] 글로벌 뉴스 통합 및 중복 제거, aggregator.py / run
 - 처음 등장한 link만 글로벌 canonical
 - 나머지는 global_replaced_by로 매핑
 출력
-- total_news_archive.csv → link 기준으로 중복 없는 기사 집합
-- total_news_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
+- canonical_archive.csv → link 기준으로 중복 없는 기사 집합
+- canonical_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스

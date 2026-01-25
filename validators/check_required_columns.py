@@ -34,11 +34,13 @@ is_global_canonical은 bool 성격인지 등
 import pandas as pd
 import sys
 
+from config import CANONICAL_ARCHIVE_PATH, DUPLICATE_HISTORY_PATH
+
 TARGETS = {
-    "outputs/final/total_news_archive.csv": [
+    "f{CANONICAL_ARCHIVE_PATH}": [
         "news_id", "link", "title", "pubDate"
     ],
-    "outputs/final/total_news_archive_meta.csv": [
+    "f{DUPLICATE_HISTORY_PATH}": [
         "news_id", "link", "is_global_canonical", "global_replaced_by"
     ]
 }

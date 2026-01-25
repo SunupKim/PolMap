@@ -18,7 +18,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from llm.issue_labeler import generate_issue_label
 
 import os
-from config import gen_client, GEMINI_MODEL_2_5, NORMAL_TEMPERATURE, GEMINI_CONFIG_NORMAL
+from config import CANONICAL_ARCHIVE_PATH, CANONICAL_META_PATH, gen_client, GEMINI_MODEL_2_5, GEMINI_CONFIG_NORMAL
 
 
 prompt_path="prompts/general_issue_clusters.txt"
@@ -60,12 +60,12 @@ IS_TEST = False
 
 if IS_TEST:
     N_CLUSTERS = 12
-    DATA_PATH = "outputs/final/test_total_news_archive.csv"
+    DATA_PATH = "test" + CANONICAL_ARCHIVE_PATH
 else:
     N_CLUSTERS = 16
-    DATA_PATH = "outputs/final/total_news_archive.csv"
+    DATA_PATH = CANONICAL_ARCHIVE_PATH
 
-"""
+""" 
 HOURS_WINDOW
 의미: 이슈 판을 구성할 때 포함할 뉴스의 시간 범위(최근 N시간)
 역할: 어떤 이슈가 '현재의 정치 이슈'로 취급되는지를 결정

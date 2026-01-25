@@ -8,7 +8,7 @@ link로는 못 잡은 ‘사실상 같은 기사일 가능성’을 제목·본�
 사람이 볼 수 있게 목록으로 뽑아주는 도구”**다.
 
 1. 입력
-outputs/final/total_news_archive.csv (이미 키워드별 클러스터링 끝났고 글로벌 link dedup까지 끝난 데이터)
+outputs/aggregated/canonical_archive.csv (이미 키워드별 클러스터링 끝났고 글로벌 link dedup까지 끝난 데이터)
 2. 계산
 기사 제목 유사도, 기사 본문 유사도 두 기준을 OR (제목이 비슷하거나 본문이 비슷하면) AND (제목도 비슷하고 본문도 비슷하면) 중 하나로 묶어서 테스트
 
@@ -23,6 +23,8 @@ from collections import defaultdict
 from processors.article_similarity_grouper import ArticleSimilarityGrouper
 from datetime import datetime
 from time import perf_counter
+
+from config import CANONICAL_ARCHIVE_PATH
 
 class GlobalSimilarityProbe:
     """
@@ -148,7 +150,7 @@ class GlobalSimilarityProbe:
 
 if __name__ == "__main__":
     start_ts = perf_counter()
-    df = pd.read_csv("outputs/final/total_news_archive.csv")
+    df = pd.read_csv("f{CANONICAL_ARCHIVE_PATH}")
 
     # OR : 제목 유사 OR 본문 유사
     # AND : 제목 유사 AND 본문 유사

@@ -6,8 +6,8 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from config import CANONICAL_ARCHIVE_PATH
 
-DATA_PATH = "outputs/final/total_news_archive.csv"
 MODEL_NAME = "dragonkue/multilingual-e5-small-ko-v2"
 
 TOP_K = 5
@@ -30,7 +30,7 @@ def build_corpus(df: pd.DataFrame):
 
 def main():
     print("데이터 로딩")
-    df = pd.read_csv(DATA_PATH)
+    df = pd.read_csv(CANONICAL_ARCHIVE_PATH)
 
     print("모델 로딩")
     model = SentenceTransformer(MODEL_NAME)

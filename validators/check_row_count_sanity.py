@@ -3,12 +3,11 @@
 import pandas as pd
 import sys
 
-ARCHIVE_PATH = "outputs/final/total_news_archive.csv"
-META_PATH = "outputs/final/total_news_archive_meta.csv"
+from config import CANONICAL_ARCHIVE_PATH, CANONICAL_META_PATH
 
 def main():
-    df_main = pd.read_csv(ARCHIVE_PATH)
-    df_meta = pd.read_csv(META_PATH)
+    df_main = pd.read_csv(CANONICAL_ARCHIVE_PATH)
+    df_meta = pd.read_csv(CANONICAL_META_PATH)
 
     if len(df_main) == 0:
         print("[FAIL] total_news_archive가 비어 있음")

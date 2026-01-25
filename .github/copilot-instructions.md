@@ -68,21 +68,30 @@ cluster_id는 유사한 기사 그룹을 의미한다. 그러나 is_canonical=Tr
 ## 주요 파일과 역할
 
 ### 진입점
-- scheduler.py
-키워드 루프를 제어하고 실행 타이밍을 관리하며 실행 지표를 기록한다.
-실행 방법: python scheduler.py
-outputs/execution_log.csv에 누적 통계를 기록한다.
 
-- aggregator.py
-모든 키워드 아카이브를 병합하고 링크 기준 전역 중복 제거를 수행한다.
-실행 방법: python aggregator.py
-출력 파일:
-total_news_archive.csv(중복 제거된 최종본)
-total_news_archive_meta.csv(모든 기사와 매핑 정보 포함)
+**메인 진입점 (스케줄러 - 자동 실행)**
+- `scripts/scheduler.py` - 정기 수집 스케줄러 (무한 루프)
+  - 실행: `python scripts/scheduler.py` 또는 `python -m scripts.scheduler`
+  - 역할: 키워드별 실행 주기 관리, 파이프라인 호출, 실행 로그 기록
+  - 출력: `outputs/execution_log.csv` (누적 통계)
 
-- main.py
-단일 키워드에 대한 핵심 파이프라인이다.
-scheduler.py에서 run_news_pipeline(keyword, total_count, is_keyword_required) 형태로 호출된다.
+**통합 스크립트 (수동 실행)**
+- `scripts/aggregator.py` - 전역 뉴스 데이터 통합 및 중복 제거
+  - 실행: `python scripts/aggregator.py` 또는 `python -m scripts.aggregator`
+  - 역할: 모든 키워드 아카이브 병합, 링크 기준 전역 중복 제거
+  - 출력: 
+    - `outputs/aggregated/canonical_archive.csv` (중복 제거된 최종본)
+    - `outputs/aggregated/canonical_archive_meta.csv` (전체 기사 + 매핑 정보)
+
+**핵심 함수 및 테스트 (공유 모듈)**
+- `pipeline.py` - 뉴스 수집 파이프라인 (함수 단위)
+  - 함수: `run_news_pipeline(keyword, total_count, is_keyword_required)`
+  - 역할: 12단계 파이프라인 실행 (Fetch → Store → Filter → Scrape → Cluster → Final)
+  - 호출처: `scripts/scheduler.py`, `main.py`
+
+- `main.py` - 단일 키워드 테스트/디버깅
+  - 실행: `python main.py`
+  - 용도: 특정 키워드로 파이프라인 수동 실행 및 로컬 테스트
 
 ### 핵심 모듈
 - api/naver_news_client.py
@@ -155,8 +164,8 @@ outputs/<keyword>/filtered_logs/
 outputs/<keyword>/similarity_logs/
 
 - 전역 경로
-outputs/final/total_news_archive.csv
-outputs/final/total_news_archive_meta.csv
+outputs/aggregated/total_news_archive.csv
+outputs/aggregated/total_news_archive_meta.csv
 
 - 상태 관리
 outputs/last_executed.json

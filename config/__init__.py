@@ -42,33 +42,48 @@ EXCLUDE_WORDS_STR = " 포토, 헤드라인, [사진], [영상], [화보], [그�
 # 제목에 반드시 검색어가 들어간 경우만 뽑아내려면 True
 # FETCH_PER_HOURS = 1 이상일 때만 의미 있음, 1보다 작으면 안됨.
 
-SEARCH_KEYWORDS = [    
-    
-    # 1그룹 : 현재는 1시간에 200건 정도 나온다 -> 2이하 필수다
-    ("이재명", False, 1), 
-    ("청와대", False, 1), 
-    ("더불어민주당", False, 1),
-    ("국민의힘", False, 1),
-    ("국회", True, 1),       # **True**
+IS_SAMPLE_RUN = True
 
-    # 2그룹 : 현재는 1시간에 50건 정도 나오고 있음 -> 5이하 필수다
-    ("정치권", False, 5), #정치권 키워드는 중복 기사가 거의 없이 나옴    
-    ("개혁신당", False, 5),     # False
-    ("조국혁신당", False, 5),   # False    
+if IS_SAMPLE_RUN:
+    SEARCH_KEYWORDS = [    
+        ("이재명", False, 1), 
+        ("청와대", False, 1), 
+    ]
+    TOTAL_FETCH_COUNT = 50
+else:
+    SEARCH_KEYWORDS = [    
+        
+        # 1그룹 : 현재는 1시간에 200건 정도 나온다 -> 2이하 필수다
+        ("이재명", False, 1), 
+        ("청와대", False, 1), 
+        ("더불어민주당", False, 1),
+        ("국민의힘", False, 1),
+        ("국회", True, 1),       # **True**
 
-    # 3그룹 : 
-    ("진보당", False, 10),       # False로 하면 많게는 하루 250건도 나온다(여론조사) True로는 하루 30건 정도 -> 20 정도도 가능할 듯.
-]
+        # 2그룹 : 현재는 1시간에 50건 정도 나오고 있음 -> 5이하 필수다
+        ("정치권", False, 5), #정치권 키워드는 중복 기사가 거의 없이 나옴    
+        ("개혁신당", False, 5),     # False
+        ("조국혁신당", False, 5),   # False    
 
-# "정치권" "이재명" "청와대" "더불어민주당" "국민의힘" "조국혁신당" "개혁신당" "진보당"
-# -"정치권" -"이재명" -"청와대" -"더불어민주당" -"국민의힘" -"조국혁신당" -"개혁신당" -"진보당"
+        # 3그룹 : 
+        ("진보당", False, 10),       # False로 하면 많게는 하루 250건도 나온다(여론조사) True로는 하루 30건 정도 -> 20 정도도 가능할 듯.
+    ]
 
-# 추가가 필요한 검색어 리스트
-# "국회" "대통령??"
+    # "정치권" "이재명" "청와대" "더불어민주당" "국민의힘" "조국혁신당" "개혁신당" "진보당"
+    # -"정치권" -"이재명" -"청와대" -"더불어민주당" -"국민의힘" -"조국혁신당" -"개혁신당" -"진보당"
 
-# 검색어당 수집할 뉴스 개수, 1000개가 MAX
-TOTAL_FETCH_COUNT = 50
-TOTAL_FETCH_COUNT = 1000
+    # 추가가 필요한 검색어 리스트
+    # "국회" "대통령??"
+
+    # 검색어당 수집할 뉴스 개수, 1000개가 MAX    
+    TOTAL_FETCH_COUNT = 1000
 
 # FETCH_PER_HOURS = 3
 AGGREGATE_PER_HOURS = 3
+
+# 파일 경로 지정
+# 설정 경로
+OUTPUT_ROOT = "outputs/"
+CANONICAL_ARCHIVE_PATH = os.path.join(OUTPUT_ROOT, "aggregated/canonical_archive.csv")
+CANONICAL_META_PATH = os.path.join(OUTPUT_ROOT, "aggregated/canonical_archive_meta.csv")
+DUPLICATE_HISTORY_PATH = os.path.join(OUTPUT_ROOT, "aggregated/duplicate__history.csv")

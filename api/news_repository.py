@@ -109,7 +109,7 @@ class NewsRepository:
         # 리스트에 없는 나머지 컬럼들도 뒤에 붙여주기
         remaining_cols = [col for col in df.columns if col not in existing_cols]
         
-        return df[existing_cols + remaining_cols]
+        return df[existing_cols + remaining_cols]                    
     
     def _finalize_and_save(self, df: pd.DataFrame, path: str, reorder: bool = False):
         """정렬, (선택적) 순서 재배치 후 CSV 저장"""
@@ -124,4 +124,6 @@ class NewsRepository:
         df = df.copy()
         # 원본 컬럼 훼손 없이 정렬용 임시 컬럼 생성
         temp_dt = pd.to_datetime(df["pubDate"], errors="coerce", utc=True)
-        return df.iloc[temp_dt.argsort()[::-1]] # drop 없이 빠르게 정렬
+        return df.sort_values(by=temp_dt.name, ascending=False, na_position="last")
+    
+    

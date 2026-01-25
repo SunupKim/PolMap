@@ -27,11 +27,10 @@ global canonical은 정확히 1개여야 한다.
 
 import pandas as pd
 import sys
-
-META_PATH = "outputs/final/total_news_archive_meta.csv"
+from config import CANONICAL_META_PATH
 
 def main():
-    df = pd.read_csv(META_PATH)
+    df = pd.read_csv(CANONICAL_META_PATH)
 
     # 1. canonical ↔ replaced_by 관계
     bad_1 = df[(df["is_global_canonical"] == True) & df["global_replaced_by"].notna()]
