@@ -27,6 +27,9 @@ global canonical은 정확히 1개여야 한다.
 
 import pandas as pd
 import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CANONICAL_META_PATH
 
 def main():

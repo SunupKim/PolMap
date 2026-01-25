@@ -7,7 +7,7 @@ from pathlib import Path
 class PipelineLogger:
     """파이프라인 단계별 로깅 및 성능 측정 유틸"""
     
-    def __init__(self, log_dir="outputs/Logs", module_name="default"):
+    def __init__(self, log_dir="logs", module_name="default"):
         self.log_dir = log_dir
         self.module_name = module_name
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

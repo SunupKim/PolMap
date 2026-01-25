@@ -72,10 +72,10 @@ def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool)
             return pipeline_stats
         
         # STEP 4: 본문 스크래핑
-        logger.start_step("본문 스크래핑", step_number=4)
+        #logger.start_step("본문 스크래핑", step_number=4)
         df_step4 = ns.fetch_contents(df_step3)
-        logger.add_metric("scrape_success_rate", f"{(len(df_step4) / len(df_step3) * 100):.1f}%")
-        logger.end_step(result_count=len(df_step4))
+        #logger.add_metric("scrape_success_rate", f"{(len(df_step4) / len(df_step3) * 100):.1f}%")
+        #logger.end_step(result_count=len(df_step4))
         
         # STEP 5: 사후 필터링
         logger.start_step("사후 필터링 (본문 길이, 발화체)", step_number=5)
@@ -102,7 +102,7 @@ def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool)
             logger.end_step(result_count=0)
         
         # 성공 상태 기록
-        pipeline_stats["status"] = "success" 
+        pipeline_stats["status"] = "success"  
         logger.save()
 
     except Exception as e:

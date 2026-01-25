@@ -2,8 +2,10 @@
 
 import pandas as pd
 import sys
+import os
 
-from config import CANONICAL_ARCHIVE_PATH, DUPLICATE_HISTORY_PATH
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import CANONICAL_ARCHIVE_PATH
 
 def main():
     try:

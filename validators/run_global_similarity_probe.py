@@ -1,6 +1,4 @@
-# global_similarity_probe.py
-# 실행법 cd D:\projects\PolMap2   python -m validators.global_similarity_probe
-
+# 실행법 python -m validators.run_global_similarity_probe
 
 """
 **“이미 만들어진 최종 뉴스 묶음에서,
@@ -24,7 +22,7 @@ from processors.article_similarity_grouper import ArticleSimilarityGrouper
 from datetime import datetime
 from time import perf_counter
 
-from config import CANONICAL_ARCHIVE_PATH
+from config import CANONICAL_ARCHIVE_PATH, PROBE_TITLE_THRESHOLD, PROBE_CONTENT_THRESHOLD
 
 class GlobalSimilarityProbe:
     """
@@ -37,13 +35,13 @@ class GlobalSimilarityProbe:
     def __init__(
         self,
         title_threshold: float,
-        body_threshold: float,
+        content_threshold: float,
         union_mode: str = "OR",  # "OR" or "AND"
         output_dir: str = "outputs/global_similarity_test"
     ):
         assert union_mode in ("OR", "AND")
         self.title_threshold = title_threshold
-        self.body_threshold = body_threshold
+        self.content_threshold = content_threshold
         self.union_mode = union_mode
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
@@ -61,7 +59,7 @@ class GlobalSimilarityProbe:
 
         # 2. 본문 유사도 그룹
         body_col = "content" if "content" in df.columns else "body"
-        body_grouper = ArticleSimilarityGrouper(self.body_threshold)
+        body_grouper = ArticleSimilarityGrouper(self.content_threshold)
         body_ids = body_grouper.group(df[body_col].fillna("").tolist())
 
         # 3. union-find 초기화
@@ -150,16 +148,14 @@ class GlobalSimilarityProbe:
 
 if __name__ == "__main__":
     start_ts = perf_counter()
-    df = pd.read_csv("f{CANONICAL_ARCHIVE_PATH}")
+    df = pd.read_csv(f"{CANONICAL_ARCHIVE_PATH}")
 
     # OR : 제목 유사 OR 본문 유사
     # AND : 제목 유사 AND 본문 유사
 
     probe = GlobalSimilarityProbe(
-        # title_threshold=1,
-        # body_threshold=1,
-        title_threshold=0.2,
-        body_threshold=0.3,
+        title_threshold=PROBE_TITLE_THRESHOLD,
+        content_threshold=PROBE_CONTENT_THRESHOLD,
         union_mode="OR"  # 또는 "AND"
     )
 

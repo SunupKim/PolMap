@@ -2,7 +2,9 @@
 
 import pandas as pd
 import sys
+import os
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CANONICAL_ARCHIVE_PATH, CANONICAL_META_PATH
 
 def main():

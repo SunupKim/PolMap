@@ -22,8 +22,8 @@ from utils.logger import PipelineLogger, verify_file_before_write
 
 
 # 통계 로그를 저장할 파일 경로
-EXECUTION_LOG_PATH = "outputs/execution_log.csv"
-LAST_EXECUTED_PATH = "outputs/last_executed.json"
+EXECUTION_LOG_PATH = "logs/execution_log.csv"
+LAST_EXECUTED_PATH = "logs/last_executed.json"
 
 def load_last_executed():
     if not os.path.exists(LAST_EXECUTED_PATH):
@@ -161,11 +161,6 @@ def job():
     print(f"{'<'*10} 정기 수집 완료 및 로그 기록 성공 {'<'*10}\n")
 
 if __name__ == "__main__":
-    logger = PipelineLogger(module_name="scheduler_main")
-    logger.start_step("스케줄러 시작", step_number=0, metadata={"total_keywords": len(SEARCH_KEYWORDS)})
-    logger.end_step(result_count=len(SEARCH_KEYWORDS))
-    logger.save()
-    
     INTERVAL_SECONDS = 60 * 60
     print(f"스케줄러 가동: 매시간 정기 수집 (INTERVAL: {INTERVAL_SECONDS}초)")
     

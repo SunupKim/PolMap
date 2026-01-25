@@ -1,5 +1,5 @@
 # main.py
-# 단일 키워드 테스트/디버깅용 진입점!!!
+# 단일 키워드 테스트/디버깅용 진입점
 # 실행: python main.py
 
 from pipeline import run_news_pipeline

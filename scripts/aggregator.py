@@ -15,8 +15,8 @@
 # - 처음 등장한 link만 글로벌 canonical  
 # - 나머지는 global_replaced_by로 매핑  
 # 출력
-# - selected_archive.csv.csv → link 기준으로 중복 없는 기사 집합
-# - selected_archive.csv_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
+# - canonical_archive.csv → link 기준으로 중복 없는 기사 집합
+# - canonical_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
 
 import os
 import sys
@@ -75,6 +75,24 @@ def run_aggregation():
     df_canonical['is_global_canonical'] = True
     df_canonical['global_replaced_by'] = None
     logger.add_metric("canonical_articles", len(df_canonical))
+
+    # [통계 출력] 키워드별 수집 대비 생존율 확인
+    print("\n=== 키워드별 통합 생존율 통계 ===")
+    stats = []
+    if 'source_keyword' in df_total.columns:
+        for kw in df_total['source_keyword'].unique():
+            total_cnt = len(df_total[df_total['source_keyword'] == kw])
+            survived_cnt = len(df_canonical[df_canonical['source_keyword'] == kw])
+            rate = (survived_cnt / total_cnt * 100) if total_cnt > 0 else 0
+            stats.append({
+                "keyword": kw,
+                "collected": total_cnt,
+                "survived": survived_cnt,
+                "rate": f"{rate:.1f}%"
+            })
+        stats_df = pd.DataFrame(stats).sort_values(by="survived", ascending=False)
+        print(stats_df.to_string(index=False))
+    print("=================================\n")
 
     df_duplicates = df_total[~df_total.index.isin(df_canonical.index)].copy()
     

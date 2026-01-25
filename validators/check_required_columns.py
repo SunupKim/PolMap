@@ -1,26 +1,15 @@
 # check_required_columns.py
 """
-역할
+1. 역할
 데이터 파일이 예상한 스키마를 유지하고 있는지 확인한다.
 
-대상
+2. 대상
+canonical_archive.csv
+canonical_archive_meta.csv
 
-total_news_archive.csv
-
-total_news_archive_meta.csv
-(필요하면 selected_archive.csv까지 확장 가능)
-
-확인하는 것
-
+3. 확인하는 것
 필수 컬럼 존재 여부
-예:
-news_id
-link
-title
-pubDate
-is_global_canonical
-global_replaced_by
-
+예: news_id link title pubDate is_global_canonical global_replaced_by 
 컬럼명이 바뀌거나 사라지지 않았는지
 
 타입까지 보려면
@@ -33,19 +22,17 @@ is_global_canonical은 bool 성격인지 등
 
 import pandas as pd
 import sys
+import os
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CANONICAL_ARCHIVE_PATH, DUPLICATE_HISTORY_PATH
 
 TARGETS = {
-    "f{CANONICAL_ARCHIVE_PATH}": [
-        "news_id", "link", "title", "pubDate"
-    ],
-    "f{DUPLICATE_HISTORY_PATH}": [
-        "news_id", "link", "is_global_canonical", "global_replaced_by"
-    ]
+    f"{CANONICAL_ARCHIVE_PATH}": ["news_id", "link", "title", "pubDate"],
+    f"{DUPLICATE_HISTORY_PATH}": ["news_id", "link", "global_replaced_by"]
 }
 
-def main():
+def main(): 
     for path, required_cols in TARGETS.items():
         try:
             df = pd.read_csv(path)

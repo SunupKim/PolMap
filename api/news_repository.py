@@ -54,7 +54,7 @@ class NewsRepository:
         return df_new_only
 
     # ---------------------------------------------------------
-    # 2. Final Archive 관리 (분석용 뉴스 누적)
+    # 2. Canonical Archive 관리 (분석용 뉴스 누적)
     # ---------------------------------------------------------
     def merge_final_incremental(self, df_final: pd.DataFrame) -> int:
         if df_final.empty: return 0

@@ -1,5 +1,4 @@
-# python validators/run_all_validators.py
-
+# 실행법 python validators/run_all_validators.py
 
 import subprocess
 import sys
