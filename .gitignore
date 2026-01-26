@@ -3,7 +3,6 @@ venv/
 env/
 __pycache__/
 .env
-*.log
 *.egg-info/
 build/
 dist/
@@ -18,4 +17,4 @@ logs/
 !logs/execution_log.csv
 !logs/last_executed.json
 !logs/aggregator/
-!logs/aggregator/aggregation_stats.csv
+!logs/aggregator/aggregation_stats.csv 
