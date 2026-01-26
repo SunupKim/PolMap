@@ -3,7 +3,7 @@
 글로벌 canonical 정책이 논리적으로 자기모순이 없는지 확인한다.
 
 대상
-outputs/final/total_news_archive_meta.csv
+outputs/aggregated/canonical_archive_meta.csv
 (또는 is_global_canonical, global_replaced_by가 함께 있는 메타 파일)
 
 확인하는 것

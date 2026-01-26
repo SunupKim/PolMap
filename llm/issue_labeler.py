@@ -24,12 +24,12 @@ def generate_issue_label(
         )
 
         label = response.text.strip()
-        if len(label) < 5 or len(label) > 30:
+        if len(label) < 3 or len(label) > 30:
             print(f"GEMINI issue label 생성 실패: 부적절한 길이 ({len(label)}자)")
             return ""
         
         if DEBUG_LLM:
-            print(f"GEMINI issue label 생성 성공: {label}")
+            print(f"GEMINI issue label 생성 성공: {label}\n")
 
         return label
 

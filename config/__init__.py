@@ -21,7 +21,6 @@ GEMINI_CONFIG_NORMAL = types.GenerateContentConfig(
     system_instruction=system_instruction_normal
 )
 
-
 # [유사도 설정]
 # THRESHOLD가 높을수록 필터가 '까다로워져서' 완전히 판박이인 기사들만 골라냄
 # TITLE_THRESHOLD: 제목 유사도가 이보다 높으면 같은 사건 그룹으로 묶임
@@ -87,6 +86,8 @@ OUTPUT_ROOT = "outputs/"
 CANONICAL_ARCHIVE_PATH = os.path.join(OUTPUT_ROOT, "aggregated/canonical_archive.csv")
 CANONICAL_META_PATH = os.path.join(OUTPUT_ROOT, "aggregated/canonical_archive_meta.csv")
 DUPLICATE_HISTORY_PATH = os.path.join(OUTPUT_ROOT, "aggregated/duplicate_history.csv")
+
+
 
     # "정치권" "이재명" "청와대" "더불어민주당" "국민의힘" "조국혁신당" "개혁신당" "진보당"
     # -"정치권" -"이재명" -"청와대" -"더불어민주당" -"국민의힘" -"조국혁신당" -"개혁신당" -"진보당"

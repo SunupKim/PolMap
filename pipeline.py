@@ -10,7 +10,7 @@ from processors.news_cluster import NewsCluster
 from config import TITLE_THRESHOLD, CONTENT_THRESHOLD, NAVER_ID, NAVER_SECRET, EXCLUDE_WORDS_STR
 from utils.logger import PipelineLogger
 
-def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool):
+def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool, log_dir: str = "logs"):
     """
     뉴스 수집 파이프라인 실행
     
@@ -18,11 +18,12 @@ def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool)
         keyword: 검색 키워드
         total_count: 수집 대상 기사 수
         is_keyword_required: True면 제목에 키워드 포함 필수
+        log_dir: 로그 파일이 저장될 디렉토리 경로
     
     Returns:
         dict: {keyword, new_raw, final_added, status}
     """
-    logger = PipelineLogger(module_name=f"pipeline_{keyword}")
+    logger = PipelineLogger(log_dir=log_dir, module_name=f"pipeline_{keyword}")
     print(f"\n{'='*20} [{keyword}] 파이프라인 가동 {'='*20}")
     
     pipeline_stats = {

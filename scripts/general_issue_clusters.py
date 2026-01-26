@@ -13,24 +13,20 @@ import time
 
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
-from datetime import datetime, timedelta
+from datetime import datetime
 from sklearn.metrics.pairwise import cosine_similarity
 from llm.issue_labeler import generate_issue_label
 
 import os
-from config import CANONICAL_ARCHIVE_PATH, CANONICAL_META_PATH, gen_client, GEMINI_MODEL_2_5, GEMINI_CONFIG_NORMAL
-
+from config import CANONICAL_ARCHIVE_PATH, gen_client, GEMINI_MODEL_2_5, GEMINI_CONFIG_NORMAL
 
 prompt_path="prompts/general_issue_clusters.txt"
 
 # 임시 캐시 (성능 최적화용, 언제든 삭제 가능)
 ARTICLE_EMBEDDINGS_CACHE = "outputs/issue_clusters/embeddings_cache.pkl"
-# 기계용 좌표계 (판의 정의)
-ISSUE_CENTERS_PATH = "outputs/issue_clusters/centers.json"
-# 사람용 설명서 (라벨·검증용)
-ISSUE_META_PATH = "outputs/issue_clusters/meta.json"
-# 기사 → 이슈 투영 결과
-ARTICLE_ISSUE_MAP_PATH = "outputs/issue_clusters/article_map.csv"
+
+# 결과물 저장 루트 디렉토리
+ISSUE_CLUSTERS_ROOT = "outputs/issue_clusters"
 
 MODEL_NAME = "dragonkue/multilingual-e5-small-ko-v2"
 RANDOM_STATE = 42 #42번 설계도로 출발한다
@@ -54,16 +50,11 @@ HOURS_WINDOW = 24 → 기사수 2000건 → N_CLUSTERS = 16
 N_CLUSTERS = 기사수/30 정도가 적절해 보이는데 졸라 테스트를 해봐야겠다
 """
 
-FIXED_BASE_DATE = "2026-01-23T10:00:00+09:00"  # 기준 시점 (이 시점부터 과거 N시간 치 뉴스로 이슈 판 구성)
-HOURS_WINDOW = 24  # 최근 N시간 치 뉴스로 이슈 판 구성
-IS_TEST = False
+FIXED_BASE_DATE = "2026-01-25T16:30:00+09:00"  # 기준 시점 (이 시점부터 과거 N시간 치 뉴스로 이슈 판 구성)
+HOURS_WINDOW = 8  # 최근 N시간 치 뉴스로 이슈 판 구성
 
-if IS_TEST:
-    N_CLUSTERS = 12
-    DATA_PATH = "test" + CANONICAL_ARCHIVE_PATH
-else:
-    N_CLUSTERS = 16
-    DATA_PATH = CANONICAL_ARCHIVE_PATH
+#N_CLUSTERS = 6
+DATA_PATH = CANONICAL_ARCHIVE_PATH
 
 """ 
 HOURS_WINDOW
@@ -163,6 +154,14 @@ def main():
     df = pd.read_csv(DATA_PATH)    # 데이터셋 로드
     print(f"데이터셋 로드 완료 → 전체 기사 수: {len(df)}")
 
+    # [경로 설정] 실행 시점 기준 날짜-시간 폴더 생성
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    current_output_dir = os.path.join(ISSUE_CLUSTERS_ROOT, run_timestamp)
+    
+    issue_centers_path = os.path.join(current_output_dir, "centers.json")
+    issue_meta_path = os.path.join(current_output_dir, "meta.json")
+    article_issue_map_path = os.path.join(current_output_dir, "article_map.csv")
+
     # === 기준 날짜 및 시간 설정 (이 시점부터 과거 N시간을 추적) ===
     # 1. 날짜 데이터 전처리 (시간대 유지)
     df["pubDate"] = pd.to_datetime(df["pubDate"], errors="coerce")
@@ -181,7 +180,12 @@ def main():
     df_filtered = df[(df["pubDate"] >= cutoff_date) & (df["pubDate"] <= base_timestamp)].copy()
     after_count = len(df_filtered)
     
-    
+    # [동적 설정] 기사 수에 따라 클러스터 개수 결정 (약 40개당 1개 이슈)
+    # 너무 적으면 클러스터링 의미가 없으므로 최소 2개로 설정
+    N_CLUSTERS = int(after_count / 40)
+    if N_CLUSTERS < 2:
+        N_CLUSTERS = 2
+
     print(f"기사 수 변화: {before_count} → {after_count} (기준: {FIXED_BASE_DATE}, 최근 {HOURS_WINDOW}시간), N_CLUSTERS={N_CLUSTERS}")
 
     if after_count < N_CLUSTERS:
@@ -254,25 +258,25 @@ def main():
         })
 
     print("결과 저장")
-    os.makedirs(os.path.dirname(ISSUE_CENTERS_PATH), exist_ok=True)
+    os.makedirs(current_output_dir, exist_ok=True)
 
-    with open(ISSUE_CENTERS_PATH, "w", encoding="utf-8") as f:
+    with open(issue_centers_path, "w", encoding="utf-8") as f:
         json.dump(issue_centers, f, ensure_ascii=False, indent=2)
 
-    with open(ISSUE_META_PATH, "w", encoding="utf-8") as f:
+    with open(issue_meta_path, "w", encoding="utf-8") as f:
         json.dump(issue_meta, f, ensure_ascii=False, indent=2)
 
     article_issue_df = pd.DataFrame({
         "news_id": article_ids,
         "issue_cluster_id": cluster_ids
     })
-    article_issue_df.to_csv(ARTICLE_ISSUE_MAP_PATH, index=False)
+    article_issue_df.to_csv(article_issue_map_path, index=False)
 
     end_time = time.time()
     elapsed = end_time - start_time    
     print(f"- 총 실행시간: {elapsed:.1f}초")
-    print(f"- 이슈 클러스터: {ISSUE_CENTERS_PATH}")
-    print(f"- 기사 매핑: {ARTICLE_ISSUE_MAP_PATH}")
+    print(f"- 이슈 클러스터: {issue_centers_path}")
+    print(f"- 기사 매핑: {article_issue_map_path}")
 
 if __name__ == "__main__":    
     main()

@@ -31,7 +31,16 @@ def load_last_executed():
     with open(LAST_EXECUTED_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_last_executed(data):
+def save_last_executed(data, backup_dir=None):
+    # [백업] 기존 last_executed.json이 있다면, 이번 실행 로그 폴더로 이동(백업)
+    if os.path.exists(LAST_EXECUTED_PATH) and backup_dir:
+        backup_filename = f"last_executed.json.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        target_path = os.path.join(backup_dir, backup_filename)
+        try:
+            os.rename(LAST_EXECUTED_PATH, target_path)
+        except Exception as e:
+            print(f"[WARN] last_executed.json 백업 이동 실패: {e}")
+
     os.makedirs(os.path.dirname(LAST_EXECUTED_PATH), exist_ok=True)
     with open(LAST_EXECUTED_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -85,9 +94,14 @@ def save_log_to_csv(stats_list):
 
 def job():
     """전체 키워드 순회 및 수집 작업"""
-    logger = PipelineLogger(module_name="scheduler")
     print(f"\n{'>'*10} 정기 수집 프로세스 시작: {datetime.now()} {'>'*10}")
-    logger.start_step("스케줄 검사 및 파이프라인 실행", step_number=1)
+    
+    # 실행 시점별 로그 폴더 생성 (예: logs/20260126_0756)
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    current_log_dir = os.path.join("logs", run_timestamp)
+    
+    logger = PipelineLogger(log_dir=current_log_dir, module_name="scheduler")
+    logger.start_step("스케줄 검사 및 파이프라인 실행", step_number=1, metadata={"log_dir": current_log_dir})
     now = datetime.now()
 
     last_executed = load_last_executed()
@@ -117,7 +131,7 @@ def job():
             continue
 
         try:
-            stats = run_news_pipeline(kw, TOTAL_FETCH_COUNT, is_required)
+            stats = run_news_pipeline(kw, TOTAL_FETCH_COUNT, is_required, log_dir=current_log_dir)
             if stats:
                 all_stats.append(stats)
                 executed_keywords.append(kw)
@@ -141,11 +155,11 @@ def job():
     logger.start_step("실행 로그 저장", step_number=2)
     try:
         if all_stats:
-            verify_file_before_write(EXECUTION_LOG_PATH)
+            # 누적 로그이므로 백업(rename) 없이 append 모드로 바로 저장
             save_log_to_csv(all_stats)
             
-            verify_file_before_write(LAST_EXECUTED_PATH)
-            save_last_executed(updated_last_executed)
+            # last_executed는 덮어쓰기 전 현재 로그 폴더로 백업
+            save_last_executed(updated_last_executed, backup_dir=current_log_dir)
             
             logger.end_step(result_count=len(all_stats))
         else:

@@ -4,9 +4,18 @@ env/
 __pycache__/
 .env
 *.log
-logs/
-outputs/
 *.egg-info/
 build/
 dist/
+
+# outputs 디렉토리 구조
+outputs/
+!outputs/aggregated/
+!outputs/aggregated/*.csv
+
+# logs 디렉토리 구조
 logs/
+!logs/execution_log.csv
+!logs/last_executed.json
+!logs/aggregator/
+!logs/aggregator/aggregation_stats.csv

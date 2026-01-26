@@ -16,7 +16,7 @@ class NewsFilter:
         keyword: str, 
         is_keyword_required: bool = False, 
         exclude_words_str: str = None, 
-        base_path: str = "logs"
+        base_path: str = "outputs"
         ):
 
         self.keyword = keyword

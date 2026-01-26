@@ -30,8 +30,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import SEARCH_KEYWORDS, AGGREGATE_PER_HOURS, CANONICAL_ARCHIVE_PATH, CANONICAL_META_PATH, DUPLICATE_HISTORY_PATH, OUTPUT_ROOT
 from utils.logger import PipelineLogger, verify_file_before_write
 
+AGGREGATION_STATS_PATH = "logs/aggregator/aggregation_stats.csv"
+
 def run_aggregation():
-    logger = PipelineLogger(module_name="aggregator")
+    # aggregator 관련 로그는 logs/aggregator 폴더에 저장
+    log_dir = os.path.join("logs", "aggregator")
+    logger = PipelineLogger(log_dir=log_dir, module_name="aggregator")
     
     print(f"\n{'#'*20} 뉴스 데이터 통합 및 중복 로직 교정 시작 {'#'*20}")
     logger.start_step("파일 로드", step_number=1, metadata={"keywords": len(SEARCH_KEYWORDS)})
@@ -58,7 +62,7 @@ def run_aggregation():
         logger.save()
         return
 
-    # 2. 전체 병합
+    # 2. 전체 병합 : 
     logger.start_step("데이터 병합 및 정렬", step_number=2)
     df_total = pd.concat(all_dfs, ignore_index=True)
     logger.add_metric("total_articles_before_dedup", len(df_total))
@@ -76,7 +80,21 @@ def run_aggregation():
     df_canonical['global_replaced_by'] = None
     logger.add_metric("canonical_articles", len(df_canonical))
 
-    # [통계 출력] 키워드별 수집 대비 생존율 확인
+    df_duplicates = df_total[~df_total.index.isin(df_canonical.index)].copy()
+    
+    duplicate_count = 0
+    if not df_duplicates.empty:
+        mapping_table = df_canonical[['link', 'news_id']].rename(columns={'news_id': 'global_replaced_by'})
+        df_duplicates = df_duplicates.merge(mapping_table, on='link', how='left')
+        df_duplicates['is_global_canonical'] = False
+        duplicate_count = len(df_duplicates)
+        logger.add_metric("duplicate_articles", duplicate_count)
+    
+    # [수정] result_count를 최종 생존 기사 수로 변경하여 로그의 직관성 향상
+    # 처리 대상 전체 수는 이미 metrics에 기록되어 있음 (canonical_articles + duplicate_articles)
+    logger.end_step(result_count=len(df_canonical))
+
+    # [통계 출력] 키워드별 수집 대비 생존율 확인 (Step 3 완료 후 출력)
     print("\n=== 키워드별 통합 생존율 통계 ===")
     stats = []
     if 'source_keyword' in df_total.columns:
@@ -92,19 +110,25 @@ def run_aggregation():
             })
         stats_df = pd.DataFrame(stats).sort_values(by="survived", ascending=False)
         print(stats_df.to_string(index=False))
-    print("=================================\n")
 
-    df_duplicates = df_total[~df_total.index.isin(df_canonical.index)].copy()
-    
-    duplicate_count = 0
-    if not df_duplicates.empty:
-        mapping_table = df_canonical[['link', 'news_id']].rename(columns={'news_id': 'global_replaced_by'})
-        df_duplicates = df_duplicates.merge(mapping_table, on='link', how='left')
-        df_duplicates['is_global_canonical'] = False
-        duplicate_count = len(df_duplicates)
-        logger.add_metric("duplicate_articles", duplicate_count)
-    
-    logger.end_step(result_count=len(df_canonical) + duplicate_count)
+        # [로그 저장] 통계 데이터를 CSV에 누적
+        try:
+            log_df = pd.DataFrame(stats)
+            log_df['execute_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 컬럼 순서 재배치 (실행시간을 맨 앞으로)
+            log_df = log_df[['execute_at', 'keyword', 'collected', 'survived', 'rate']]
+            
+            print(AGGREGATION_STATS_PATH)
+            os.makedirs(os.path.dirname(AGGREGATION_STATS_PATH), exist_ok=True)
+            is_new = not os.path.exists(AGGREGATION_STATS_PATH)
+            log_df.to_csv(AGGREGATION_STATS_PATH, mode='a', header=is_new, index=False, encoding='utf-8-sig')
+
+            # 시간대별 구분선 추가
+            with open(AGGREGATION_STATS_PATH, "a", encoding="utf-8-sig") as f:
+                f.write("-" * 50 + "\n")
+        except Exception as e:
+            print(f"[WARN] 통계 로그 저장 실패: {e}")
+    print("=================================\n")
 
     # 5. 중복 제거 이력 저장
     logger.start_step("중복 제거 이력 저장", step_number=4)

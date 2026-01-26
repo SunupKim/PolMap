@@ -1,14 +1,16 @@
 
-import pandas as pd
 # scripts/lookup_general_issue.py
 # 특정 이슈 클러스터(예: 5번)가 어떤 기사들로 구성되어 있는지 조회
 # 실행 방법: py -m scripts.lookup_general_issue
+
+import pandas as pd
+from config import CANONICAL_META_PATH
 
 def main():
     
     ISSUE_ID = 5
 
-    articles = pd.read_csv("outputs/final/test_total_news_archive.csv")
+    articles = pd.read_csv(f"{CANONICAL_META_PATH}")    
     mapping = pd.read_csv("outputs/issue_clusters/article_map.csv")
 
     merged = articles.merge(mapping, on="news_id")
