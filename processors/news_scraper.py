@@ -3,6 +3,7 @@ import time
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 import pandas as pd
+from utils.text_normalizer import normalize_html_text
 
 class NewsScraper:
     """
@@ -22,8 +23,14 @@ class NewsScraper:
         
         for _, row in tqdm(df.iterrows(), total=len(df), desc="Scraping News"):
             content = self._scrape_article(row['link'])
+
+            
+            content = normalize_html_text(content)   # ← &quot 및 태크 제거
+
             contents.append(content)
             time.sleep(self.delay)
+
+
             
         df['content'] = contents
         return df

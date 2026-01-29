@@ -82,7 +82,7 @@ cluster_id는 유사한 기사 그룹을 의미한다. 그러나 is_canonical=Tr
   - 역할: 모든 키워드 아카이브 병합, 링크 기준 전역 중복 제거
   - 출력: 
     - `outputs/aggregated/canonical_archive.csv` (중복 제거된 최종본)
-    - `outputs/aggregated/canonical_archive_meta.csv` (전체 기사 + 매핑 정보)
+    
 
 **핵심 함수 및 테스트 (공유 모듈)**
 - `pipeline.py` - 뉴스 수집 파이프라인 (함수 단위)
@@ -128,7 +128,7 @@ Gemini 2.5 Flash용 시스템 프롬프트이다.
 
 예컨대 scripts/aggregator.py는 drop_duplicates(subset=['link'])를 사용하여 URL이 같은 중복 기사를 하나만 남기고 모두 제거. 빠르고 명확하지만, 다른 언론사에서 발행한 내용은 거의 같지만 URL이 다른 '우라까이' 기사는 잡아내지 못한다.(실제로는 이 결과물이 임베딩에 사용됨) 다만, Keyword 별로 수집할 때는 제목유사도와 본문 유사도를 이미 체크했음.
 
-validators/run_global_similarity_probe.py는 URL은 전혀 보지 않고, 오직 기사의 제목과 본문 내용을 벡터로 변환한 뒤 코사인 유사도를 계산. 이 유사도 점수가 config 파일에 설정된 PROBE_TITLE_THRESHOLD, PROBE_CONTENT_THRESHOLD 값보다 높으면 "사실상 같은 기사"일 가능성이 높다고 판단하고 그룹으로 묶는다. 결론적으로 aggregator.py는 1차적인 기계적 중복 제거를, run_global_similarity_probe.py는 내용 기반의 고차원적인 중복을 검증하는 역할을 수행한다. 다만 테스트용일 뿐 실전에서는 동작하지 않는다. 다른 기사를 다른 언론사에서 그대로 받아썼으면 중요도가 높다고 보기 때문.
+validators/run_probe_global_similarity.py는 URL은 전혀 보지 않고, 오직 기사의 제목과 본문 내용을 벡터로 변환한 뒤 코사인 유사도를 계산. 이 유사도 점수가 config 파일에 설정된 PROBE_TITLE_THRESHOLD, PROBE_CONTENT_THRESHOLD 값보다 높으면 "사실상 같은 기사"일 가능성이 높다고 판단하고 그룹으로 묶는다. 결론적으로 aggregator.py는 1차적인 기계적 중복 제거를, run_probe_global_similarity.py는 내용 기반의 고차원적인 중복을 검증하는 역할을 수행한다. 다만 테스트용일 뿐 실전에서는 동작하지 않는다. 다른 기사를 다른 언론사에서 그대로 받아썼으면 중요도가 높다고 보기 때문.
 
 ---
 
@@ -210,8 +210,8 @@ python scripts/rag_test_e5.py
 
 ### 주로 확인하는 로그
 - execution_log.csv: 키워드별 실행 통계(new_raw, final_added, timestamp)
-- <keyword>/similarity_logs/YYYYMMDD_HHMM.csv: 상세 클러스터 할당 결과
 - <keyword>/filtered_logs/stepN_*.csv: 필터 단계별 기사 제외 사유
+- <keyword>/similarity_logs/YYYYMMDD_HHMM.csv: 상세 클러스터 할당 결과, 키워드별 클러스터링 로직은 이 파일을 보면 알 수 있다
 - outputs/last_executed.json: 키워드별 마지막 실행 시각
 
 ## 연동 지점 및 외부 의존성
@@ -246,13 +246,13 @@ python scripts/rag_test_e5.py
 1. ArticleSimilarityGrouper를 확장하거나 processors/에 새 클래스를 추가한다.
 2. NewsCluster.process()에서 이를 사용하도록 수정한다.
 3. similarity_logs/YYYYMMDD_HHMM.csv에 클러스터링 결과를 기록한다.
-4. cluster_id, is_canonical, replaced_by 컬럼은 반드시 유지한다(하위 단계 의존).
+4. cluster_id, is_canon, replaced_by 컬럼은 반드시 유지한다(하위 단계 의존).
 
 ### 대표 기사 선정 로직 변경
 
 1. CanonicalNewsPolicy의 메서드를 수정한다.
 2. validators/check_global_canonical_consistency.py로 테스트한다.
-3. is_canonical 컬럼이 변경 사항을 정확히 반영하는지 확인한다.
+3. is_canon 컬럼이 변경 사항을 정확히 반영하는지 확인한다.
 
 ---
 

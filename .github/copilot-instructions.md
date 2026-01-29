@@ -22,7 +22,7 @@ PolMap2는 데이터 품질(중복 제거)을 최우선으로 하는 한국 정�
 ### 유사도 및 클러스터링 (OR 조건)
 - **기준**: `TITLE_THRESHOLD`(0.20) **OR** `CONTENT_THRESHOLD`(0.15) 중 하나라도 만족하면 동일 그룹.
 - **목적**: 제목만 살짝 바꾼 '우라까이' 기사를 잡아내기 위함.
-- **결과**: `cluster_id`로 묶이며, `is_canonical=True`인 기사 하나만 생존. 나머지는 `replaced_by`로 매핑.
+- **결과**: `cluster_id`로 묶이며, `is_canon=True`인 기사 하나만 생존. 나머지는 `replaced_by`로 매핑.
 
 ### 중복 제거 및 검증 정책
 1. **Aggregator (`scripts/aggregator.py`)**:

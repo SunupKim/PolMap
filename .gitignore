@@ -8,13 +8,33 @@ build/
 dist/
 
 # outputs 디렉토리 구조
-outputs/
+# outputs 전체 제외
+outputs/*
+
+# aggregated 디렉토리만 접근 허용
 !outputs/aggregated/
+
+# aggregated 안의 모든 파일은 다시 제외
+outputs/aggregated/*
+
+# aggregated 안의 csv만 추적
 !outputs/aggregated/*.csv
 
+# global_similarity_test 전부 추적
+# !outputs/probe_global_similarity/
+# !outputs/probe_global_similarity/*
+
 # logs 디렉토리 구조
-logs/
+# logs 전체 제외
+logs/*
+
+# 루트 로그 파일만 추적
 !logs/execution_log.csv
 !logs/last_executed.json
+
+# aggregator 디렉토리 접근 허용
 !logs/aggregator/
-!logs/aggregator/aggregation_stats.csv 
+!logs/aggregator/*
+
+# aggregator 안에서는 aggregation_stats.csv만 추적
+!logs/aggregator/aggregation_stats.csv

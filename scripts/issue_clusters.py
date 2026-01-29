@@ -16,6 +16,7 @@ from sklearn.cluster import KMeans
 from datetime import datetime
 from sklearn.metrics.pairwise import cosine_similarity
 from llm.issue_labeler import generate_issue_label
+from utils.dataframe_utils import canonical_df_save
 
 import os
 from config import CANONICAL_ARCHIVE_PATH, gen_client, GEMINI_MODEL_2_5, GEMINI_CONFIG_NORMAL
@@ -54,7 +55,6 @@ FIXED_BASE_DATE = "2026-01-25T16:30:00+09:00"  # 기준 시점 (이 시점부터
 HOURS_WINDOW = 8  # 최근 N시간 치 뉴스로 이슈 판 구성
 
 #N_CLUSTERS = 6
-DATA_PATH = CANONICAL_ARCHIVE_PATH
 
 """ 
 HOURS_WINDOW
@@ -151,7 +151,7 @@ def select_representative_titles(
 def main():
 
     start_time = time.time()
-    df = pd.read_csv(DATA_PATH)    # 데이터셋 로드
+    df = pd.read_csv(CANONICAL_ARCHIVE_PATH)    # 데이터셋 로드
     print(f"데이터셋 로드 완료 → 전체 기사 수: {len(df)}")
 
     # [경로 설정] 실행 시점 기준 날짜-시간 폴더 생성
@@ -270,7 +270,11 @@ def main():
         "news_id": article_ids,
         "issue_cluster_id": cluster_ids
     })
-    article_issue_df.to_csv(article_issue_map_path, index=False)
+
+    #article_issue_df.to_csv(article_issue_map_path, index=False)
+
+    
+    canonical_df_save(article_issue_df, CANONICAL_ARCHIVE_PATH)        
 
     end_time = time.time()
     elapsed = end_time - start_time    

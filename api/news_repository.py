@@ -97,18 +97,13 @@ class NewsRepository:
         """분석 편의를 위해 컬럼 순서 재배치"""
         # 디버그 로그와 동일한 핵심 컬럼을 앞으로 배치
         desired_order = [
-            #"news_id", "title", "is_canonical", "title_group_id", "content_group_id", "replaced_by",
-            #"search_keyword", "pubDate", "content", "link", "originallink", "description", "collected_at"
-
-            # 아래는 내 편의에 따라 조정
-            # 불필요한 칼럼들 삭제
-            "news_id", "title", "pubDate", "link", "originallink", "description", "collected_at", "content"
+            "news_id", "pubDate", "collected_at", "title", "link", "originallink", "description", "content"
         ]
         # 실제 존재하는 컬럼만 골라내기 (KeyError 방지)
         existing_cols = [col for col in desired_order if col in df.columns]
         # 리스트에 없는 나머지 컬럼들도 뒤에 붙여주기
         remaining_cols = [col for col in df.columns if col not in existing_cols]
-        
+         
         return df[existing_cols + remaining_cols]                    
     
     def _finalize_and_save(self, df: pd.DataFrame, path: str, reorder: bool = False):
@@ -116,7 +111,10 @@ class NewsRepository:
         df = self._sort(df)
         if reorder:
             df = self._reorder_columns(df)
-        df.to_csv(path, index=False, encoding='utf-8-sig')
+
+        #df.to_csv(path, index=False, encoding='utf-8-sig')를 아래로 대체        
+        from utils.dataframe_utils import raw_df_save        
+        raw_df_save(df, path)        
 
     def _sort(self, df: pd.DataFrame) -> pd.DataFrame:
         """날짜 기준 역순 정렬"""

@@ -3,6 +3,7 @@ import json
 import urllib.request
 import urllib.parse
 from models.news_article_model import NewsArticleModel
+from utils.text_normalizer import normalize_html_text
 
 class NaverNewsClient:
     """네이버 뉴스 검색 API 클라이언트
@@ -41,8 +42,8 @@ class NaverNewsClient:
                     # 1. 모델 객체 생성 (이 시점에 news_id 자동 생성 및 검증 발생)
                     article_obj = NewsArticleModel(
                         search_keyword=keyword,
-                        title=item.get('title', ''),
-                        description=item.get('description', ''),
+                        title=normalize_html_text(item.get('title', '')),
+                        description=normalize_html_text(item.get('description', '')),
                         link=item.get('link', ''),
                         originallink=item.get('originallink', ''),
                         pubDate=item.get('pubDate', '')

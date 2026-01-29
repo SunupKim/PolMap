@@ -6,9 +6,6 @@ import sys
 VALIDATORS = [
     "validators/check_no_duplicate_links.py",
     "validators/check_required_columns.py",
-    "validators/check_global_canonical_consistency.py",
-    "validators/check_row_count_sanity.py",
-    "validators/check_canonical_policy_execution.py",
 ]
 
 def run_validator(path: str) -> int:

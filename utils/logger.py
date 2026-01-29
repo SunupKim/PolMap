@@ -10,7 +10,7 @@ class PipelineLogger:
     def __init__(self, log_dir="logs", module_name="default"):
         self.log_dir = log_dir
         self.module_name = module_name
-        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M")
         self.log_file = os.path.join(log_dir, f"{module_name}_{self.timestamp}.json")
         self.steps = []
         self.current_step = None
@@ -23,7 +23,7 @@ class PipelineLogger:
         self.current_step = {
             "step_number": step_number,
             "step_name": step_name,
-            "start_time": datetime.now().isoformat(),
+            "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "status": "running",
             "metadata": metadata or {},
             "metrics": {}
@@ -37,7 +37,7 @@ class PipelineLogger:
             return
         
         elapsed = time.time() - self.step_start_time
-        self.current_step["end_time"] = datetime.now().isoformat()
+        self.current_step["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.current_step["elapsed_seconds"] = round(elapsed, 2)
         self.current_step["status"] = "error" if error else "completed"
         
@@ -89,23 +89,15 @@ def ensure_directory_writable(dirpath):
 
 
 def verify_file_before_write(filepath):
-    """파일 저장 전 경로 및 권한 검증"""
+    """파일 저장 전 경로 및 권한 검증 (백업 생성 안 함)"""
     dirpath = os.path.dirname(filepath)
-    
+
     # 디렉토리 생성 및 권한 확인
     writable, error = ensure_directory_writable(dirpath)
     if not writable:
         raise PermissionError(f"디렉토리 쓰기 불가: {dirpath} - {error}")
-    
-    # 파일이 이미 존재하면 백업 생성
-    if os.path.exists(filepath):
-        backup_path = filepath + f".backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        try:
-            os.rename(filepath, backup_path)
-            print(f"[INFO] 기존 파일 백업: {backup_path}")
-        except Exception as e:
-            raise PermissionError(f"기존 파일 백업 실패: {filepath} - {e}")
-    
+
+    # 파일 존재 여부는 체크만 한다 (덮어쓰기는 호출 측 책임)
     return True
 
 
@@ -123,7 +115,7 @@ class ExecutionSummary:
         
         record = {
             "stage": stage,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "input_count": input_count,
             "output_count": output_count,
             "elapsed_seconds": elapsed_seconds,

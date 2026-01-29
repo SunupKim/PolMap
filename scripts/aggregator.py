@@ -1,209 +1,224 @@
-# scripts/aggregator.py
-# 전역 뉴스 데이터 통합 및 중복 제거
-# 실행: 항상 프로젝트 루트에서만 실행하세요! 
-#   python scripts/aggregator.py
-#   또는
-#   python -m scripts.aggregator
-# 주의: 다른 디렉토리에서 실행하면 경로 오류 발생합니다
+"""
+scripts/aggregator.py
+전역 뉴스 데이터 통합 및 중복 제거
+실행: python -m scripts.aggregator
 
-# 입력
-# - 각 키워드 폴더의 selected_archive.csv
-# - 이미 클러스터링 + canonical 선정까지 끝난 결과
-# 처리
-# - 모든 키워드 결과를 하나로 concat
-# - link 컬럼 기준으로 duplicated() 수행
-# - 처음 등장한 link만 글로벌 canonical  
-# - 나머지는 global_replaced_by로 매핑  
-# 출력
-# - canonical_archive.csv → link 기준으로 중복 없는 기사 집합
-# - canonical_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
+역할
+- 키워드별로 이미 canonical로 확정된 기사들을 수집해
+  전역(global) 단일 뉴스 풀을 구성한다.
+- 이 스크립트는 키워드 맥락을 고려하지 않으며,
+  전체 뉴스 기준으로 중복을 제거한다.
+- 중복 제거는 다음 순서로 수행된다.
+  1) link(news_id) 기준 물리적 중복 제거
+  2) title AND body 유사도 기준 의미적 중복 제거
+
+입력
+- 각 키워드 폴더의 selected_archive.csv
+  (각 행은 키워드 단위에서 이미 canonical로 확정된 기사)
+
+출력
+- canonical_archive.csv
+  → 전역 기준으로 중복 제거된 최종 기사 집합
+"""
 
 import os
 import sys
-import pandas as pd
 import time
-from datetime import datetime
+import pandas as pd
+from utils.dataframe_utils import canonical_df_save
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import SEARCH_KEYWORDS, AGGREGATE_PER_HOURS, CANONICAL_ARCHIVE_PATH, CANONICAL_META_PATH, DUPLICATE_HISTORY_PATH, OUTPUT_ROOT
-from utils.logger import PipelineLogger, verify_file_before_write
+from config import (
+    SEARCH_KEYWORDS,
+    AGGREGATE_PER_HOURS,
+    CANONICAL_ARCHIVE_PATH,    
+    OUTPUT_ROOT,
+    GLOBAL_TITLE_THRESHOLD,
+    GLOBAL_CONTENT_THRESHOLD,
+)
 
-AGGREGATION_STATS_PATH = "logs/aggregator/aggregation_stats.csv"
-
-def run_aggregation():
-    # aggregator 관련 로그는 logs/aggregator 폴더에 저장
-    log_dir = os.path.join("logs", "aggregator")
-    logger = PipelineLogger(log_dir=log_dir, module_name="aggregator")
-    
-    print(f"\n{'#'*20} 뉴스 데이터 통합 및 중복 로직 교정 시작 {'#'*20}")
-    logger.start_step("파일 로드", step_number=1, metadata={"keywords": len(SEARCH_KEYWORDS)})
+def _load_keyword_archives(logger):
+    """키워드별 selected_archive.csv 파일 로드"""
+    logger.start_step("파일 로드", step_number=1)
     all_dfs = []
 
-    # 1. 파일 로드
-    loaded_count = 0
     for kw, _, _ in SEARCH_KEYWORDS:
-        file_path = os.path.join(OUTPUT_ROOT, kw, "selected_archive.csv")
-        if os.path.exists(file_path):
-            try:
-                df = pd.read_csv(file_path)
-                if not df.empty:
-                    df['source_keyword'] = kw
-                    all_dfs.append(df)
-                    loaded_count += 1
-            except Exception as e:
-                print(f"!!! [{kw}] 파일 읽기 오류: {e}")
-                logger.add_metric(f"error_{kw}", str(e))
-    
-    logger.end_step(result_count=loaded_count)
+        path = os.path.join(OUTPUT_ROOT, kw, "selected_archive.csv")
+        if not os.path.exists(path):
+            continue
 
+        try:
+            df = pd.read_csv(path)
+            if not df.empty:
+                all_dfs.append(df)
+        except Exception as e:
+            logger.add_metric(f"error_{kw}", str(e))
+
+    logger.end_step(result_count=len(all_dfs))
+    return all_dfs
+
+def _merge_archives(all_dfs, logger):
+    
+    """키워드별 selected_archive.csv를 단순 병합하여
+    전역 처리 대상 뉴스 풀(df_total)을 생성한다."""
+
+    logger.start_step("데이터 병합", step_number=2)
+    df_total = pd.concat(all_dfs, ignore_index=True)
+    logger.add_metric("total_articles", len(df_total))
+    logger.end_step(result_count=len(df_total))
+    # 제외 기사 추적을 위해 원본 복사본 반환
+    return df_total, df_total.copy()
+
+def _deduplicate_global(df_total, df_original, logger):
+    
+    """전역 중복 제거
+    처리 순서:
+    1) news_id(link) 기준으로 동일 기사 제거
+    2) title AND body 유사도로 의미적 중복 제거
+    3) global_group_id 기준으로 대표 기사 1건만 유지
+    4) 제외된 기사 목록 생성 (row 기준) - 최종 canonical에 포함되지 않은 수집 row들
+    """
+     
+    logger.start_step("Global canonical 선정", step_number=3)
+
+    # pubDate 정규화 및 정렬
+    if "pubDate" in df_total.columns:
+        df_total["pubDate"] = pd.to_datetime(
+            df_total["pubDate"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d %H:%M:%S")
+        df_total = df_total.sort_values("pubDate", ascending=False)
+
+    # 1️⃣ link / news_id 기준 물리 중복 제거 (먼저)
+    df_after_link = (
+        df_total
+        .drop_duplicates(subset=["news_id"], keep="first")
+        .copy()
+    )
+
+    link_excluded_count = len(df_total) - len(df_after_link)
+
+    # 2️⃣ 의미 중복 제거 (title AND body)
+    from processors.global_news_merger import GlobalNewsMerger
+
+    merger = GlobalNewsMerger(
+        title_threshold=GLOBAL_TITLE_THRESHOLD,
+        content_threshold=GLOBAL_CONTENT_THRESHOLD
+    )
+
+    df_after_link = merger.group(df_after_link)
+    df_before_similarity = df_after_link.copy()
+
+    logger.add_metric(
+        "global_similarity_groups",
+        df_after_link["global_group_id"].nunique()
+    )
+
+    # 사건 단위 축소
+    df_global_canonical = (
+        df_after_link
+        .drop_duplicates(subset=["global_group_id"], keep="first")
+        .copy()
+    )
+
+    similarity_excluded_count = (
+        len(df_before_similarity) - len(df_global_canonical)
+    )
+
+    # 제외된 기사 (row 기준)
+    excluded_rows = df_total.merge(
+        df_global_canonical[["news_id"]],
+        on="news_id",
+        how="left",
+        indicator=True
+    )
+
+    df_excluded = excluded_rows[
+        excluded_rows["_merge"] == "left_only"
+    ].drop(columns=["_merge"]).copy()
+
+    excluded_path = os.path.join(
+        os.path.dirname(CANONICAL_ARCHIVE_PATH),
+        "excluded_global.csv"
+    )
+    os.makedirs(os.path.dirname(excluded_path), exist_ok=True)
+    canonical_df_save(df_excluded, excluded_path)
+
+    print(f">>> 링크 중복으로 제거된 기사: {link_excluded_count}건")
+    print(f">>> 유사도로 병합되어 제거된 기사: {similarity_excluded_count}건")
+    print(f">>> 전체 제외 기사(row 기준): {len(df_excluded)}건 ({excluded_path})")
+
+    logger.add_metric("global_canonical_count", len(df_global_canonical))
+    logger.end_step(result_count=len(df_global_canonical))
+
+    return df_global_canonical
+
+def _save_canonical_results(df_global_canonical, logger):
+    """최종 결과 저장"""
+    from utils.logger import verify_file_before_write
+
+    logger.start_step("메타데이터 생성", step_number=4)
+
+    def reorder(df):
+        base = ["news_id", "pubDate", "collected_at"]
+        cols = list(df.columns)
+        rest = [c for c in cols if c not in base]
+        return df[[c for c in base if c in cols] + rest]
+
+    df_global_canonical = reorder(df_global_canonical)
+
+    verify_file_before_write(CANONICAL_ARCHIVE_PATH)
+    os.makedirs(os.path.dirname(CANONICAL_ARCHIVE_PATH), exist_ok=True)
+    canonical_df_save(df_global_canonical, CANONICAL_ARCHIVE_PATH)
+
+    logger.end_step(result_count=len(df_global_canonical))
+    return df_global_canonical
+
+def run_aggregation():
+    """전역 뉴스 데이터 통합 메인 실행 함수"""
+    from utils.logger import PipelineLogger
+
+    logger = PipelineLogger(
+        log_dir=os.path.join("logs", "aggregator"),
+        module_name="aggregator"
+    )
+
+    # 1. 파일 로드
+    all_dfs = _load_keyword_archives(logger)
     if not all_dfs:
         logger.save()
         return
 
-    # 2. 전체 병합 : 
-    logger.start_step("데이터 병합 및 정렬", step_number=2)
-    df_total = pd.concat(all_dfs, ignore_index=True)
-    logger.add_metric("total_articles_before_dedup", len(df_total))
-    df_total.drop(columns=['is_canonical', 'replaced_by'], inplace=True, errors='ignore')
+    # 2. 데이터 병합
+    df_total, df_original = _merge_archives(all_dfs, logger)
 
-    # 3. pubDate 정렬 (가장 최신 기사를 대표로 선정)
-    if 'pubDate' in df_total.columns:
-        df_total = df_total.sort_values(by='pubDate', ascending=False)
-    logger.end_step(result_count=len(df_total))
+    # 3. 유사도 병합 및 중복 제거
+    df_global_canonical = _deduplicate_global(df_total, df_original, logger)
 
-    # 4. 글로벌 중복 판별 및 분리
-    logger.start_step("글로벌 중복 제거", step_number=3)
-    df_canonical = df_total.drop_duplicates(subset=['link'], keep='first').copy()
-    df_canonical['is_global_canonical'] = True
-    df_canonical['global_replaced_by'] = None
-    logger.add_metric("canonical_articles", len(df_canonical))
+    # 4. 최종 저장
+    df_global_canonical = _save_canonical_results(df_global_canonical, logger)
 
-    df_duplicates = df_total[~df_total.index.isin(df_canonical.index)].copy()
-    
-    duplicate_count = 0
-    if not df_duplicates.empty:
-        mapping_table = df_canonical[['link', 'news_id']].rename(columns={'news_id': 'global_replaced_by'})
-        df_duplicates = df_duplicates.merge(mapping_table, on='link', how='left')
-        df_duplicates['is_global_canonical'] = False
-        duplicate_count = len(df_duplicates)
-        logger.add_metric("duplicate_articles", duplicate_count)
-    
-    # [수정] result_count를 최종 생존 기사 수로 변경하여 로그의 직관성 향상
-    # 처리 대상 전체 수는 이미 metrics에 기록되어 있음 (canonical_articles + duplicate_articles)
-    logger.end_step(result_count=len(df_canonical))
-
-    # [통계 출력] 키워드별 수집 대비 생존율 확인 (Step 3 완료 후 출력)
-    print("\n=== 키워드별 통합 생존율 통계 ===")
-    stats = []
-    if 'source_keyword' in df_total.columns:
-        for kw in df_total['source_keyword'].unique():
-            total_cnt = len(df_total[df_total['source_keyword'] == kw])
-            survived_cnt = len(df_canonical[df_canonical['source_keyword'] == kw])
-            rate = (survived_cnt / total_cnt * 100) if total_cnt > 0 else 0
-            stats.append({
-                "keyword": kw,
-                "collected": total_cnt,
-                "survived": survived_cnt,
-                "rate": f"{rate:.1f}%"
-            })
-        stats_df = pd.DataFrame(stats).sort_values(by="survived", ascending=False)
-        print(stats_df.to_string(index=False))
-
-        # [로그 저장] 통계 데이터를 CSV에 누적
-        try:
-            log_df = pd.DataFrame(stats)
-            log_df['execute_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            # 컬럼 순서 재배치 (실행시간을 맨 앞으로)
-            log_df = log_df[['execute_at', 'keyword', 'collected', 'survived', 'rate']]
-            
-            print(AGGREGATION_STATS_PATH)
-            os.makedirs(os.path.dirname(AGGREGATION_STATS_PATH), exist_ok=True)
-            is_new = not os.path.exists(AGGREGATION_STATS_PATH)
-            log_df.to_csv(AGGREGATION_STATS_PATH, mode='a', header=is_new, index=False, encoding='utf-8-sig')
-
-            # 시간대별 구분선 추가
-            with open(AGGREGATION_STATS_PATH, "a", encoding="utf-8-sig") as f:
-                f.write("-" * 50 + "\n")
-        except Exception as e:
-            print(f"[WARN] 통계 로그 저장 실패: {e}")
-    print("=================================\n")
-
-    # 5. 중복 제거 이력 저장
-    logger.start_step("중복 제거 이력 저장", step_number=4)
-    if not df_duplicates.empty:
-        history_df = df_duplicates[[
-            'source_keyword',
-            'news_id',
-            'link',
-            'global_replaced_by'
-        ]].copy()
-        history_df['execute_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        try:
-            verify_file_before_write(DUPLICATE_HISTORY_PATH)
-            os.makedirs(os.path.dirname(DUPLICATE_HISTORY_PATH), exist_ok=True)
-            is_new = not os.path.exists(DUPLICATE_HISTORY_PATH)
-            history_df.to_csv(
-                DUPLICATE_HISTORY_PATH,
-                mode='a',
-                header=is_new,
-                index=False,
-                encoding='utf-8-sig'
-            )
-            logger.end_step(result_count=len(history_df))
-        except Exception as e:
-            logger.end_step(error=str(e))
-            raise
-    else:
-        logger.end_step(result_count=0)
-    
-    # 6. 최종 데이터 합치기 (메타 파일용)
-    logger.start_step("메타데이터 생성", step_number=5)
-    df_all_processed = pd.concat([df_canonical, df_duplicates], ignore_index=True)
-    meta_columns = ['news_id', 'link', 'source_keyword', 'title', 'pubDate', 'cluster_id', 'title_id', 'body_id', 'is_global_canonical', 'global_replaced_by']
-    actual_meta_cols = [c for c in meta_columns if c in df_all_processed.columns]
-    df_meta_final = df_all_processed[actual_meta_cols].copy()
-    logger.end_step(result_count=len(df_meta_final))
-
-    # 7. 저장
-    logger.start_step("파일 저장", step_number=6)
-    try:
-        verify_file_before_write(CANONICAL_ARCHIVE_PATH)
-        verify_file_before_write(CANONICAL_META_PATH)
-        
-        os.makedirs(os.path.dirname(CANONICAL_ARCHIVE_PATH), exist_ok=True)
-        df_canonical.to_csv(CANONICAL_ARCHIVE_PATH, index=False, encoding='utf-8-sig')
-        df_meta_final.to_csv(CANONICAL_META_PATH, index=False, encoding='utf-8-sig')
-        
-        logger.end_step(result_count=len(df_canonical))
-        
-        print(f">>> 통합 완료: 전체 {len(df_total)}건 중 {len(df_canonical)}건 선별")
-        print(f">>> 중복으로 {duplicate_count}건이 global_replaced_by로 매핑되었습니다.")
-        
-    except PermissionError as e:
-        logger.end_step(error=str(e))
-        raise
-    
     logger.save()
 
-    
+    print(
+        f">>> 통합 완료: 전체 {len(df_total)}건 → "
+        f"최종 {len(df_global_canonical)}건"
+    )
+
 if __name__ == "__main__":
-    # 설정값 로드
     INTERVAL_SECONDS = AGGREGATE_PER_HOURS * 60 * 60
     print(f"데이터 통합 스케줄러 가동 중... (주기: {AGGREGATE_PER_HOURS}시간)")
-    
+
     while True:
         try:
             run_aggregation()
             print(f"다음 통합 작업까지 {AGGREGATE_PER_HOURS}시간 대기합니다...")
             time.sleep(INTERVAL_SECONDS)
         except KeyboardInterrupt:
-            print("\n[INFO] 사용자 중단 신호 (Ctrl+C)")
+            print("\n[INFO] 사용자 중단")
             break
         except Exception as e:
             print(f"\n[ERROR] 집계 오류: {e}")
-            print(f"5초 후 재시작합니다...")
+            print("5초 후 재시작합니다...")
             time.sleep(5)
-            continue

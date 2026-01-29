@@ -1,4 +1,4 @@
-# 실행법 python -m validators.run_global_similarity_probe
+# 실행법 python -m validators.run_probe_global_similarity
 
 """
 **“이미 만들어진 최종 뉴스 묶음에서,
@@ -18,13 +18,14 @@ outputs/aggregated/canonical_archive.csv (이미 키워드별 클러스터링 �
 import pandas as pd
 import os
 from collections import defaultdict
-from processors.article_similarity_grouper import ArticleSimilarityGrouper
 from datetime import datetime
 from time import perf_counter
 
+from processors.article_similarity_grouper import ArticleSimilarityGrouper
 from config import CANONICAL_ARCHIVE_PATH, PROBE_TITLE_THRESHOLD, PROBE_CONTENT_THRESHOLD
+from utils.dataframe_utils import canonical_df_save, global_similarity_df_save
 
-class GlobalSimilarityProbe:
+class ProbeGlobalSimilarity:
     """
     total_news_archive.csv 대상 글로벌 유사도 탐지기
     - 제목 / 본문 유사도만 계산
@@ -37,7 +38,7 @@ class GlobalSimilarityProbe:
         title_threshold: float,
         content_threshold: float,
         union_mode: str = "OR",  # "OR" or "AND"
-        output_dir: str = "outputs/global_similarity_test"
+        output_dir: str = "outputs/probe_global_similarity"
     ):
         assert union_mode in ("OR", "AND")
         self.title_threshold = title_threshold
@@ -51,19 +52,23 @@ class GlobalSimilarityProbe:
             print("데이터가 비어 있습니다.")
             return
 
-        n = len(df)
+        n_total = len(df)
+        print(f"[준비] 대상 개수 {n_total}건")
+        
 
         # 1. 제목 유사도 그룹
         title_grouper = ArticleSimilarityGrouper(self.title_threshold)
         title_ids = title_grouper.group(df["title"].fillna("").tolist())
+        print(f"[제목] 유사그룹: {n_total-len(set(title_ids))}개\n")
 
         # 2. 본문 유사도 그룹
         body_col = "content" if "content" in df.columns else "body"
         body_grouper = ArticleSimilarityGrouper(self.content_threshold)
         body_ids = body_grouper.group(df[body_col].fillna("").tolist())
+        print(f"[본문] 유사그룹: {n_total-len(set(body_ids))}개\n")
 
         # 3. union-find 초기화
-        parent = list(range(n))
+        parent = list(range(n_total))
 
         def find(i):
             if parent[i] != i:
@@ -108,7 +113,7 @@ class GlobalSimilarityProbe:
 
         else:  # AND
             pair_map = defaultdict(list)
-            for i in range(n):
+            for i in range(n_total):
                 pair_map[(title_ids[i], body_ids[i])].append(i)
 
             for indices in pair_map.values():
@@ -123,12 +128,12 @@ class GlobalSimilarityProbe:
 
         # 6. cluster_id 생성
         df = df.copy()
-        df["global_sim_cluster"] = [f"G-{find(i)}" for i in range(n)]
+        df["global_sim_cluster"] = [f"G-{find(i)}" for i in range(n_total)]
 
         # 7. 중복 후보만 필터링 (cluster size >= 2)
         counts = df["global_sim_cluster"].value_counts()
         dup_clusters = counts[counts >= 2].index.tolist()
-        df_candidates = df[df["global_sim_cluster"].isin(dup_clusters)]
+        df_candidates = df[df["global_sim_cluster"].isin(dup_clusters)].copy()
 
         # 8. 로그 저장
         ts = datetime.now().strftime("%Y%m%d_%H%M")        
@@ -139,10 +144,14 @@ class GlobalSimilarityProbe:
             self.output_dir, f"edges_{self.union_mode}_{ts}.csv" # 연결구조
         )
 
-        df_candidates.to_csv(cand_path, index=False, encoding="utf-8-sig")
-        pd.DataFrame(edges).to_csv(edge_path, index=False, encoding="utf-8-sig")
-
-        print(f"[완료] 중복 후보 {len(df_candidates)}건")
+        # df_candidates.to_csv(cand_path, index=False, encoding="utf-8-sig")
+        # pd.DataFrame(edges).to_csv(edge_path, index=False, encoding="utf-8-sig")        
+        
+        global_similarity_df_save(df_candidates, cand_path)        
+        canonical_df_save(pd.DataFrame(edges), edge_path)       
+        
+        #print(f"[완료] 중복 후보 {len(df_candidates)}건")
+        print(f"[완료] {self.union_mode} 모드 중복 후보: {len(df_candidates)}건 ({len(dup_clusters)}개 그룹)")
         # print(f"[저장] 후보: {cand_path}")
         # print(f"[저장] 연결 구조: {edge_path}")
 
@@ -153,10 +162,11 @@ if __name__ == "__main__":
     # OR : 제목 유사 OR 본문 유사
     # AND : 제목 유사 AND 본문 유사
 
-    probe = GlobalSimilarityProbe(
+    probe = ProbeGlobalSimilarity(
         title_threshold=PROBE_TITLE_THRESHOLD,
         content_threshold=PROBE_CONTENT_THRESHOLD,
         union_mode="OR"  # 또는 "AND"
+        #union_mode="AND"  # 또는 "AND"
     )
 
     probe.run(df)

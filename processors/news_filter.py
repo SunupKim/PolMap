@@ -4,6 +4,7 @@ import os, re
 import pandas as pd
 from datetime import datetime
 
+
 class NewsFilter:
     """
     뉴스 필터링 전문 객체
@@ -34,22 +35,25 @@ class NewsFilter:
             self.exclude_pattern = ""     
 
     def _save_log(self, df: pd.DataFrame, filename: str):
-        """탈락한 기사들을 추적하기 위해 저장 (파일명에 날짜시간 추가)"""
+        """탈락한 기사들을 하나의 파일에 누적 저장"""    
         if not df.empty:
-            # 1. 현재 날짜와 시간 가져오기 (예: 20260115_1459)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+            path = os.path.join(self.log_path, filename)
             
-            # 2. 파일명과 확장자 분리 후 타임스탬프 삽입
-            # 예: step5_empty_content.csv -> step5_empty_content_20260115_1459.csv
-            name, ext = os.path.splitext(filename)
-            new_filename = f"{name}_{timestamp}{ext}"
-            
-            path = os.path.join(self.log_path, new_filename)
-            
-            # 3. 파일 저장 (매번 새로운 시간에 생성되므로 사실상 'w' 모드가 되지만, 안정성을 위해 유지)
+            # 파일이 이미 존재하면 append, 없으면 새로 생성
             mode = 'a' if os.path.exists(path) else 'w'
             header = not os.path.exists(path)
             
+            # 컬럼 순서 재정렬: news_id, pubDate, collected_at이 1~3번째
+            cols = list(df.columns)
+            for col in ["pubDate", "collected_at"]:
+                if col not in cols:
+                    cols.append(col)
+            def reorder(cols):
+                base = ["news_id", "pubDate", "collected_at"]
+                rest = [c for c in cols if c not in base]
+                return [c for c in base if c in cols] + rest
+            df = df[reorder(cols)]
+
             df.to_csv(path, index=False, mode=mode, header=header, encoding='utf-8-sig')
 
     def apply_pre_filter(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -89,7 +93,7 @@ class NewsFilter:
         self._save_log(df[dup_mask], "step3_duplicate_title.csv")
         df = df[~dup_mask].drop(columns=['temp_press']).copy()
 
-        print(f"[Filter] Pre-filtering 완료: {before_cnt}건 -> {len(df)}건 ----------> (삭제: {before_cnt - len(df)}건)")
+        print(f"[Filter] Pre-filtering 완료: {before_cnt}건 -> {len(df)}건 <---------- (삭제: {before_cnt - len(df)}건)")
         #print(f"[Filter] Pre-filtering 완료: {before_cnt}건 -> {len(df)}건")
         return df
 
@@ -128,6 +132,6 @@ class NewsFilter:
         # self._save_log(df[speech_mask], "step5_speech_style.csv")
         # df = df[~speech_mask].copy()
 
-        print(f"[Filter] Post-filtering 완료: {before_cnt}건 -> {len(df)}건 ---------> (삭제: {before_cnt - len(df)}건)")
+        print(f"[Filter] Post-filtering 완료: {len(df)}건 <--------- (삭제: {before_cnt - len(df)}건)")
         #print(f"[Filter] Post-filtering 완료: {before_cnt}건 -> {len(df)}건")
         return df

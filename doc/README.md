@@ -16,7 +16,7 @@ Step 4,본문 크롤링 (Scraping),NewsScraper.fetch_contents,BeautifulSoup 활�
 Step 5,1) 빈 본문 제거2) 본문 길이 체크3) 말투(Speech) 필터링,NewsFilter.apply_post_filter,본문 품질 기준 필터링
 Step 6,제목 유사도 그룹핑 (T-번호),NewsCluster._build_title_groups,title_group_id 부여
 Step 7,본문 유사도 정밀 체크 (C-번호),NewsCluster._refine_by_body_similarity,content_group_id 부여
-Step 8,대표 기사 선정 및 치환,NewsCluster._mark_canonical_articles,"is_canonical, replaced_by"
+Step 8,대표 기사 선정 및 치환,NewsCluster._mark_canonical_articles,"is_canon, replaced_by"
 Step 9,결과물 병합 및 로그 저장,NewsRepository.merge_final_incrementalNewsCluster._save_similarity_debug_log,컬럼 순서 재배치 및 저장
 Step 10,[추가] 중복 그룹 전용 검토,NewsCluster._save_grouped_only_log,2개 이상 묶인 그룹만 추출
 Step 11,실행 통계 로그 강화, scheduler.py / save_log_to_csv, 사이클별 구분줄 삽입 및 누적 수집량/수집 효율(Ratio) 계산 
@@ -37,4 +37,3 @@ Step 12, [신규] 글로벌 뉴스 통합 및 중복 제거, aggregator.py / run
 - 나머지는 global_replaced_by로 매핑
 출력
 - canonical_archive.csv → link 기준으로 중복 없는 기사 집합
-- canonical_archive_meta.csv → 전체 기사 + 글로벌 중복 관계 인덱스
