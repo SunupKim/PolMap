@@ -1,6 +1,9 @@
 # RULE: 디버그 로그(print) 및 주석 삭제 금지.
 # scripts/general_issue_clusters.py
+
+# 임베딩은 기사 자체의 좌표(누적)고 클러스터링은 특정 시간창에서 그 좌표들로 ‘이슈 지도’를 다시 그리는 작업
 # 정치 뉴스라는 거대한 책더미를 내용별로 12개(N_CLUSTERS)의 바구니에 나누어 담는 작업을 자동화
+
 # 실행 방법: py -m scripts.general_issue_clusters
 # 임베딩 → KMeans로 클러스터링 → 대표기사 선택 → LLM 통해 라벨링
 
@@ -17,22 +20,15 @@ from datetime import datetime
 from sklearn.metrics.pairwise import cosine_similarity
 from llm.issue_labeler import generate_issue_label
 from utils.dataframe_utils import canonical_df_save
-
-import os
 from config import CANONICAL_ARCHIVE_PATH, gen_client, GEMINI_MODEL_2_5, GEMINI_CONFIG_NORMAL
 
-prompt_path="prompts/general_issue_clusters.txt"
-
-# 임시 캐시 (성능 최적화용, 언제든 삭제 가능)
-ARTICLE_EMBEDDINGS_CACHE = "outputs/issue_clusters/embeddings_cache.pkl"
-
-# 결과물 저장 루트 디렉토리
-ISSUE_CLUSTERS_ROOT = "outputs/issue_clusters"
-
-MODEL_NAME = "dragonkue/multilingual-e5-small-ko-v2"
-RANDOM_STATE = 42 #42번 설계도로 출발한다
-
 """
+HOURS_WINDOW
+의미: 이슈 판을 구성할 때 포함할 뉴스의 시간 범위(최근 N시간)
+역할: 어떤 이슈가 '현재의 정치 이슈'로 취급되는지를 결정
+성격: 설계 결정값(판의 시간적 경계)
+주의: 이 값을 변경하면 이슈 클러스터 전체를 재생성해야 한다
+
 N_CLUSTERS
 의미: 이슈 클러스터 개수 K
 역할: 정치판을 몇 개의 이슈 공간으로 나눌지 결정
@@ -42,9 +38,7 @@ N_CLUSTERS
 권장값 연구: 기사수 350개 -> 12, 500개 -> 20 
 테스트 
 HOURS_WINDOW = 8 → 기사수 350 → N_CLUSTERS = 12 적절
-
 HOURS_WINDOW = 8 → 기사수 350~650 → N_CLUSTERS = ?
-
 HOURS_WINDOW = 12 → 기사수 700~1300건 → N_CLUSTERS = 16
 HOURS_WINDOW = 24 → 기사수 2000건 → N_CLUSTERS = 16
 하루 뉴스는 약 2000건 정도?
@@ -53,16 +47,15 @@ N_CLUSTERS = 기사수/30 정도가 적절해 보이는데 졸라 테스트를 �
 
 FIXED_BASE_DATE = "2026-01-25T16:30:00+09:00"  # 기준 시점 (이 시점부터 과거 N시간 치 뉴스로 이슈 판 구성)
 HOURS_WINDOW = 8  # 최근 N시간 치 뉴스로 이슈 판 구성
+#N_CLUSTERS = 6 # 테스트할 때는 임의로 지정했지만 현재는 기사수에 따라서 main()에서 동적으로 결정된다
 
-#N_CLUSTERS = 6
-
-""" 
-HOURS_WINDOW
-의미: 이슈 판을 구성할 때 포함할 뉴스의 시간 범위(최근 N시간)
-역할: 어떤 이슈가 '현재의 정치 이슈'로 취급되는지를 결정
-성격: 설계 결정값(판의 시간적 경계)
-주의: 이 값을 변경하면 이슈 클러스터 전체를 재생성해야 한다
-"""
+prompt_path="prompts/general_issue_clusters.txt"
+# 임시 캐시 (성능 최적화용, 언제든 삭제 가능)
+ARTICLE_EMBEDDINGS_CACHE = "outputs/issue_clusters/embeddings_cache.pkl"
+# 결과물 저장 루트 디렉토리
+ISSUE_CLUSTERS_ROOT = "outputs/issue_clusters"
+MODEL_NAME = "dragonkue/multilingual-e5-small-ko-v2"
+RANDOM_STATE = 42 #42번 설계도로 출발한다
 
 def build_corpus(df: pd.DataFrame):
     texts = []

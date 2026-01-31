@@ -38,3 +38,5 @@ logs/*
 
 # aggregator 안에서는 aggregation_stats.csv만 추적
 !logs/aggregator/aggregation_stats.csv
+logs/aggregator/*
+

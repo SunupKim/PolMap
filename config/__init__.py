@@ -56,8 +56,8 @@ CANONICAL_ARCHIVE_PATH = os.path.join(OUTPUT_ROOT, "aggregated/canonical_archive
 # IS_SAMPLE_RUN에 따라 SEARCH_KEYWORDS, TOTAL_FETCH_COUNT가 달라지므로 
 # scheduler.py, aggregator.py 모두에 영향을 미친다
 
-IS_SAMPLE_RUN = True #테스트모드
-#IS_SAMPLE_RUN = False #실전모드
+#IS_SAMPLE_RUN = True #테스트모드
+IS_SAMPLE_RUN = False #실전모드
 
 if IS_SAMPLE_RUN:
     SEARCH_KEYWORDS = [    
@@ -82,10 +82,9 @@ else:
 
         # 3그룹 : 
         ("진보당", False, 10),       # False로 하면 많게는 하루 250건도 나온다(여론조사) True로는 하루 30건 정도 -> 20 정도도 가능할 듯.
+        ("기본소득당", False, 10),
     ]
     TOTAL_FETCH_COUNT = 1000     # 검색어당 수집할 뉴스 개수, 1000개가 MAX        
-
-
 
 # 표준 컬럼 순서 (필요시 외부 모듈에서 import해서 사용)
 COLUMN_ORDER = [
