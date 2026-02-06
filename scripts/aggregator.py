@@ -26,6 +26,7 @@ import sys
 import time
 import pandas as pd
 from utils.dataframe_utils import canonical_df_save
+from processors.global_news_grouper import GlobalNewsGrouper
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -85,9 +86,7 @@ def _deduplicate_global(df_total, df_original, logger):
 
     # pubDate 정규화 및 정렬
     if "pubDate" in df_total.columns:
-        df_total["pubDate"] = pd.to_datetime(
-            df_total["pubDate"], errors="coerce"
-        ).dt.strftime("%Y-%m-%d %H:%M:%S")
+        df_total["pubDate"] = pd.to_datetime(df_total["pubDate"], errors="coerce")
         df_total = df_total.sort_values("pubDate", ascending=False)
 
     # 1️⃣ link / news_id 기준 물리 중복 제거 (먼저)
@@ -100,14 +99,13 @@ def _deduplicate_global(df_total, df_original, logger):
     link_excluded_count = len(df_total) - len(df_after_link)
 
     # 2️⃣ 의미 중복 제거 (title AND body)
-    from processors.global_news_merger import GlobalNewsMerger
-
-    merger = GlobalNewsMerger(
+    
+    grouper = GlobalNewsGrouper(
         title_threshold=GLOBAL_TITLE_THRESHOLD,
         content_threshold=GLOBAL_CONTENT_THRESHOLD
     )
 
-    df_after_link = merger.group(df_after_link)
+    df_after_link = grouper.group(df_after_link)
     df_before_similarity = df_after_link.copy()
 
     logger.add_metric(

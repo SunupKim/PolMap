@@ -4,11 +4,16 @@
 
 from api.naver_news_client import NaverNewsClient
 from api.news_repository import NewsRepository
-from processors.news_filter import NewsFilter
-from processors.news_scraper import NewsScraper
-from processors.news_cluster import NewsCluster
+from processors.single_news_pre_post_filter import SingleNewsPrePostFilter
+from processors.single_news_scraper import SingleNewsScraper
+from processors.single_news_clusterer import SingleNewsClusterer
 from config import SINGLE_TITLE_THRESHOLD, SINGLE_CONTENT_THRESHOLD, NAVER_ID, NAVER_SECRET, EXCLUDE_WORDS_STR
 from utils.logger import PipelineLogger
+from config import SIMHASH_TITLE_DISTANCE, SIMHASH_BODY_DISTANCE
+from processors.simhash_deduplicator import SimHashDeduplicator
+from utils.simhash_log import save_simhash_removed
+from datetime import datetime
+import os
 
 def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool, log_dir: str = "logs"):
 
@@ -20,15 +25,22 @@ def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool,
         "new_raw": 0,
         "final_added": 0,
         "status": "initialized"
-    }
+    }    
 
     try:
         # 1. 초기화 및 API 호출
         client = NaverNewsClient(NAVER_ID, NAVER_SECRET)
         repo = NewsRepository(keyword)
-        nf = NewsFilter(keyword, is_keyword_required=is_keyword_required, exclude_words_str=EXCLUDE_WORDS_STR)
-        ns = NewsScraper(delay=0.1)
-        cluster_tool = NewsCluster(title_threshold=SINGLE_TITLE_THRESHOLD, content_threshold=SINGLE_CONTENT_THRESHOLD)
+        nf = SingleNewsPrePostFilter(keyword, is_keyword_required=is_keyword_required, exclude_words_str=EXCLUDE_WORDS_STR)
+        ns = SingleNewsScraper(delay=0.1)
+
+        simhash_deduplicator = SimHashDeduplicator(
+            title_distance=SIMHASH_TITLE_DISTANCE,
+            body_distance=SIMHASH_BODY_DISTANCE
+            
+        )
+
+        cluster_tool = SingleNewsClusterer(title_threshold=SINGLE_TITLE_THRESHOLD, content_threshold=SINGLE_CONTENT_THRESHOLD)
 
         raw_items = client.fetch_news_batch(keyword, total_count=total_count)
         df_new = repo.save_raw_and_get_new(raw_items)
@@ -56,13 +68,16 @@ def run_news_pipeline(keyword: str, total_count: int, is_keyword_required: bool,
         # STEP 5: 사후 필터링
         df_step5 = nf.apply_post_filter(df_step4)
         
-        # STEP 6: 클러스터링
-        # df_clustered : 클러스터링 및 대표 기사 선정이 적용된 실제 기사별 클러스터링/대표기사 결과 DataFrame
-        # stats : 통계 정보 딕셔너리 (클러스터 개수, 대표 기사 개수 등 요약 통계)
+        # STEP 6: SimHash 전처리 (추가)        
+        df_step6, df_simhash_removed = simhash_deduplicator.deduplicate(df_step5)
+        save_simhash_removed(df_simhash_removed, keyword)
 
-        df_clustered, stats = cluster_tool.process(df_step5, keyword)
+        # STEP 7: 클러스터링
+        df_clustered, stats = cluster_tool.process(df_step6, keyword)
+        # df_clustered : 클러스터링 및 대표 기사 선정이 적용된 실제 기사별 클러스터링/대표기사 결과 DataFrame
+        # stats : 통계 정보 딕셔너리 (클러스터 개수, 대표 기사 개수 등 요약 통계)        
         
-        # STEP 7: 최종 병합
+        # STEP 7: Keyword별 최종 병합
         if not df_clustered.empty:
             df_final = df_clustered[df_clustered["is_canon"] == True].copy()
             added_cnt = repo.merge_final_incremental(df_final)

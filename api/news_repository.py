@@ -87,7 +87,7 @@ class NewsRepository:
             df = pd.read_csv(path, usecols=["pubDate"])
             if df.empty: return None
             
-            pub_dates = pd.to_datetime(df["pubDate"], errors="coerce", utc=True)
+            pub_dates = pd.to_datetime(df["pubDate"], errors="coerce")
             return pub_dates.max()
         except Exception:
             return None
@@ -117,11 +117,11 @@ class NewsRepository:
         raw_df_save(df, path)        
 
     def _sort(self, df: pd.DataFrame) -> pd.DataFrame:
-        """날짜 기준 역순 정렬"""
-        if df.empty: return df
+        if df.empty:
+            return df
         df = df.copy()
-        # 원본 컬럼 훼손 없이 정렬용 임시 컬럼 생성
-        temp_dt = pd.to_datetime(df["pubDate"], errors="coerce", utc=True)
-        return df.sort_values(by=temp_dt.name, ascending=False, na_position="last")
-    
+        temp_dt = pd.to_datetime(df["pubDate"], errors="coerce")
+        df["_sort_pubDate"] = temp_dt
+        df = df.sort_values("_sort_pubDate", ascending=False, na_position="last")
+        return df.drop(columns=["_sort_pubDate"])
     

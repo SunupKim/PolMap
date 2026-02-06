@@ -1,3 +1,5 @@
+# dataframe_utils.py
+
 from config import RAW_COLUMNS, CANONICAL_COLUMNS
 import pandas as pd
 
@@ -8,12 +10,9 @@ GLOBAL_SIMILARITY_COLUMNS = ["search_keyword", "news_id", "source_keyword",
                      ]
 
 def _save_df(df, path, columns):
-    df = df.copy()  # SettingWithCopyWarning 방지
+    df = df.copy()
     if "pubDate" in df.columns:
-        df["pubDate"] = (
-            pd.to_datetime(df["pubDate"], errors="coerce")
-              .dt.strftime("%Y-%m-%d %H:%M:%S")
-        )
+        df["pubDate"] = pd.to_datetime(df["pubDate"], errors="coerce")
     df = df[[c for c in columns if c in df.columns]
             + [c for c in df.columns if c not in columns]]
     df.to_csv(path, index=False, encoding="utf-8-sig")
