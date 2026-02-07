@@ -101,7 +101,7 @@ def job():
     current_log_dir = os.path.join("logs", run_timestamp)
     
     logger = PipelineLogger(log_dir=current_log_dir, module_name="scheduler")
-    logger.start_step("스케줄 검사 및 파이프라인 실행", step_number=1, metadata={"log_dir": current_log_dir})
+    logger.start_step("스케줄 검사 및 파이프라인 실행", step_number=1, metadata={"log_dir": current_log_dir})    
     now = datetime.now()
 
     last_executed = load_last_executed()

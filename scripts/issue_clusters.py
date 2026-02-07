@@ -156,8 +156,9 @@ def main():
     article_issue_map_path = os.path.join(current_output_dir, "article_map.csv")
 
     # === 기준 날짜 및 시간 설정 (이 시점부터 과거 N시간을 추적) ===
-    # 1. 날짜 데이터 전처리 (시간대 유지)
-    df["pubDate"] = pd.to_datetime(df["pubDate"], errors="coerce")
+    # 1. 날짜 데이터 전처리 (시간대 유지)    
+    df["pubDate"] = pd.to_datetime(df["pubDate"], errors="coerce", utc=True)
+    
     df = df.dropna(subset=["pubDate"])
     # [디버그용] 데이터셋의 실제 시간 범위 출력
     print(f"데이터셋 시간 범위: {df['pubDate'].min()} ~ {df['pubDate'].max()}")

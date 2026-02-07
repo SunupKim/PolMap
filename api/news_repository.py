@@ -20,7 +20,8 @@ class NewsRepository:
         # 원본 및 최종 저장소 경로
         self.raw_archive_path = os.path.join(self.dir_path, "raw_archive.csv")
         self.selected_archive_path = os.path.join(self.dir_path, "selected_archive.csv")
-        
+        self.selected_archive_copy_path = os.path.join(self.dir_path, "selected_archive_copy.csv")
+
         # 중복 체크 시 비교할 최근 기사 수
         self.lookback_limit = 2000
 
@@ -71,6 +72,10 @@ class NewsRepository:
 
         # 공통 저장 로직 호출
         self._finalize_and_save(df_total, self.selected_archive_path, reorder=True)
+
+        # ✅ selected_archive_copy.csv 저장
+        self._save_copy_selected(df_total)
+
         return len(incremental)
 
     # ---------------------------------------------------------
@@ -115,6 +120,25 @@ class NewsRepository:
         #df.to_csv(path, index=False, encoding='utf-8-sig')를 아래로 대체        
         from utils.dataframe_utils import raw_df_save        
         raw_df_save(df, path)        
+
+    def _save_copy_selected(self, df: pd.DataFrame):
+        """
+        사람이 빠르게 훑기 위한 요약본
+        """
+        copy_cols = ["news_id", "pubDate", "title", "description"]
+        existing = [c for c in copy_cols if c in df.columns]
+
+        if not existing:
+            return
+
+        copy_df = df[existing].copy()
+
+        copy_df.to_csv(
+            self.selected_archive_copy_path,
+            index=False,
+            encoding="utf-8-sig"
+        )
+
 
     def _sort(self, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:

@@ -10,7 +10,7 @@ scripts/aggregator.py
   전체 뉴스 기준으로 중복을 제거한다.
 - 중복 제거는 다음 순서로 수행된다.
   1) link(news_id) 기준 물리적 중복 제거
-  2) title AND body 유사도 기준 의미적 중복 제거
+  2) title OR body 유사도 기준 의미적 중복 제거 (OR + chaining)
 
 입력
 - 각 키워드 폴더의 selected_archive.csv
@@ -26,7 +26,9 @@ import sys
 import time
 import pandas as pd
 from utils.dataframe_utils import canonical_df_save
-from processors.global_news_grouper import GlobalNewsGrouper
+from processors.article_similarity_grouper import ArticleSimilarityGrouper
+from processors.canonical_news_policy import CanonicalNewsPolicy
+from utils.text_normalizer import NewsTextNormalizer
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -72,85 +74,158 @@ def _merge_archives(all_dfs, logger):
     # 제외 기사 추적을 위해 원본 복사본 반환
     return df_total, df_total.copy()
 
-def _deduplicate_global(df_total, df_original, logger):
-    
-    """전역 중복 제거
-    처리 순서:
-    1) news_id(link) 기준으로 동일 기사 제거
-    2) title AND body 유사도로 의미적 중복 제거
-    3) global_group_id 기준으로 대표 기사 1건만 유지
-    4) 제외된 기사 목록 생성 (row 기준) - 최종 canonical에 포함되지 않은 수집 row들
+def _deduplicate_global(df_total, logger):
     """
-     
-    logger.start_step("Global canonical 선정", step_number=3)
+    GLOBAL dedup entrypoint
+    1) news_id(link) 기준 중복 제거
+    2) similarity 기반 OR + chaining 제거
+    """
 
-    # pubDate 정규화 및 정렬
+    logger.start_step("Global dedup", step_number=3)
+
+    # pubDate 정렬 (최신 기사 우선 생존을 위함)
     if "pubDate" in df_total.columns:
         df_total["pubDate"] = pd.to_datetime(df_total["pubDate"], errors="coerce")
         df_total = df_total.sort_values("pubDate", ascending=False)
 
-    # 1️⃣ link / news_id 기준 물리 중복 제거 (먼저)
-    df_after_link = (
-        df_total
-        .drop_duplicates(subset=["news_id"], keep="first")
-        .copy()
-    )
+    # 1) link / news_id 기준 중복 제거
+    df_after_link = df_total.drop_duplicates(
+        subset=["news_id"], keep="first"
+    ).copy()
 
-    link_excluded_count = len(df_total) - len(df_after_link)
+    link_removed_count = len(df_total) - len(df_after_link)
 
-    # 2️⃣ 의미 중복 제거 (title AND body)
-    
-    grouper = GlobalNewsGrouper(
+    # 2) similarity 기반 dedup
+    df_after_similarity, df_similarity_removed = _deduplicate_global_similarity(
+        df_after_link,
         title_threshold=GLOBAL_TITLE_THRESHOLD,
-        content_threshold=GLOBAL_CONTENT_THRESHOLD
+        content_threshold=GLOBAL_CONTENT_THRESHOLD,
     )
 
-    df_after_link = grouper.group(df_after_link)
-    df_before_similarity = df_after_link.copy()
+    # 3) similarity 제거 기사 저장
+    if not df_similarity_removed.empty:
+        excluded_path = os.path.join(
+            os.path.dirname(CANONICAL_ARCHIVE_PATH),
+            "excluded_global_similarity.csv"
+        )
+        os.makedirs(os.path.dirname(excluded_path), exist_ok=True)
+        canonical_df_save(df_similarity_removed, excluded_path)
 
-    logger.add_metric(
-        "global_similarity_groups",
-        df_after_link["global_group_id"].nunique()
+    logger.add_metric("link_removed", link_removed_count)
+    logger.add_metric("similarity_removed", len(df_similarity_removed))
+    logger.add_metric("global_canonical_count", len(df_after_similarity))
+    
+    print(
+    f"[GLOBAL] link 중복 제거: {link_removed_count}건 | "
+    f"유사도 제거: {len(df_similarity_removed)}건 | "
+    f"최종 canonical: {len(df_after_similarity)}건"
     )
 
-    # 사건 단위 축소
-    df_global_canonical = (
-        df_after_link
-        .drop_duplicates(subset=["global_group_id"], keep="first")
-        .copy()
-    )
+    logger.end_step(result_count=len(df_after_similarity))
+    return df_after_similarity
 
-    similarity_excluded_count = (
-        len(df_before_similarity) - len(df_global_canonical)
-    )
+def _deduplicate_global_similarity(
+    df: pd.DataFrame,
+    title_threshold: float,
+    content_threshold: float,
+):
+    """
+    GLOBAL similarity-based deduplication
+    - OR + chaining
+    - connected component 당 1개만 생존
+    """
 
-    # 제외된 기사 (row 기준)
-    excluded_rows = df_total.merge(
-        df_global_canonical[["news_id"]],
-        on="news_id",
-        how="left",
-        indicator=True
-    )
+    if df.empty:
+        return df, pd.DataFrame()
 
-    df_excluded = excluded_rows[
-        excluded_rows["_merge"] == "left_only"
-    ].drop(columns=["_merge"]).copy()
+    df = df.copy().reset_index(drop=True)
 
-    excluded_path = os.path.join(
-        os.path.dirname(CANONICAL_ARCHIVE_PATH),
-        "excluded_global.csv"
-    )
-    os.makedirs(os.path.dirname(excluded_path), exist_ok=True)
-    canonical_df_save(df_excluded, excluded_path)
+    titles = df["title"].fillna("").tolist()
+    bodies = df["content"].fillna("").tolist()
 
-    print(f">>> 링크 중복으로 제거된 기사: {link_excluded_count}건")
-    print(f">>> 유사도로 병합되어 제거된 기사: {similarity_excluded_count}건")
-    print(f">>> 전체 제외 기사(row 기준): {len(df_excluded)}건 ({excluded_path})")
+    # 1) title / body 각각 OR+chaining 그룹
+    title_grouper = ArticleSimilarityGrouper(title_threshold, field_name="GLOBAL_TITLE")
+    body_grouper = ArticleSimilarityGrouper(content_threshold, field_name="GLOBAL_BODY")
 
-    logger.add_metric("global_canonical_count", len(df_global_canonical))
-    logger.end_step(result_count=len(df_global_canonical))
+    # 제목에서 부호 제거 전처리
+    titles = [
+    NewsTextNormalizer.normalize_title(t)
+    for t in df["title"].fillna("").tolist()
+    ]
 
-    return df_global_canonical
+    title_groups = title_grouper.group(titles)
+    body_groups = body_grouper.group(bodies)
+
+    # 2) OR 조건으로 union-find
+    n = len(df)
+    parent = list(range(n))
+
+    def find(i):
+        if parent[i] != i:
+            parent[i] = find(parent[i])
+        return parent[i]
+
+    def union(i, j):
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[ri] = rj
+
+    # title OR body가 같으면 연결
+    from collections import defaultdict
+    
+    title_map = defaultdict(list)
+    body_map = defaultdict(list)
+
+    for i, gid in enumerate(title_groups):
+        title_map[gid].append(i)
+
+    for i, gid in enumerate(body_groups):
+        body_map[gid].append(i)
+
+    # title 기준 union
+    for indices in title_map.values():
+        for i in range(len(indices) - 1):
+            union(indices[i], indices[i + 1])
+
+    # body 기준 union
+    for indices in body_map.values():
+        for i in range(len(indices) - 1):
+            union(indices[i], indices[i + 1])
+
+
+    # 3) connected component 수집
+    components = {}
+    for i in range(n):
+        root = find(i)
+        components.setdefault(root, []).append(i)
+
+    selector = CanonicalNewsPolicy()
+
+    keep_indices = []
+    drop_indices = []
+
+    # 4) component 단위로 1개만 생존
+    for indices in components.values():
+        if len(indices) == 1:
+            keep_indices.append(indices[0])
+            continue
+
+        group_df = df.iloc[indices]
+        rep = selector.select(group_df)
+        rep_idx = group_df.index.get_loc(rep.name)
+        rep_global_idx = indices[rep_idx]
+
+        keep_indices.append(rep_global_idx)
+        for idx in indices:
+            if idx != rep_global_idx:
+                drop_indices.append(idx)
+
+    kept_df = df.iloc[sorted(keep_indices)].copy()
+    dropped_df = df.iloc[sorted(drop_indices)].copy()
+
+    dropped_df["removed_by"] = "global_similarity"
+
+    return kept_df, dropped_df
 
 def _save_canonical_results(df_global_canonical, logger):
     """최종 결과 저장"""
@@ -166,9 +241,22 @@ def _save_canonical_results(df_global_canonical, logger):
 
     df_global_canonical = reorder(df_global_canonical)
 
+    # 1) canonical_archive.csv
     verify_file_before_write(CANONICAL_ARCHIVE_PATH)
     os.makedirs(os.path.dirname(CANONICAL_ARCHIVE_PATH), exist_ok=True)
     canonical_df_save(df_global_canonical, CANONICAL_ARCHIVE_PATH)
+
+    # 2) canonical_archive_copy.csv (신규)
+    copy_cols = ["news_id", "pubDate", "title", "description"]
+    copy_df = df_global_canonical[
+        [c for c in copy_cols if c in df_global_canonical.columns]
+    ].copy()
+
+    copy_path = os.path.join(
+        os.path.dirname(CANONICAL_ARCHIVE_PATH),
+        "canonical_archive_copy.csv"
+    )
+    copy_df.to_csv(copy_path, index=False, encoding="utf-8-sig")
 
     logger.end_step(result_count=len(df_global_canonical))
     return df_global_canonical
@@ -192,7 +280,7 @@ def run_aggregation():
     df_total, df_original = _merge_archives(all_dfs, logger)
 
     # 3. 유사도 병합 및 중복 제거
-    df_global_canonical = _deduplicate_global(df_total, df_original, logger)
+    df_global_canonical = _deduplicate_global(df_total, logger)
 
     # 4. 최종 저장
     df_global_canonical = _save_canonical_results(df_global_canonical, logger)

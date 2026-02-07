@@ -48,7 +48,8 @@ class PipelineLogger:
             self.current_step["error_message"] = str(error)
             print(f"[ERROR] {self.current_step['step_name']}: {error}")
         else:
-            print(f"[STEP {self.current_step['step_number']}] {self.current_step['step_name']} 완료 ({elapsed:.2f}초, {result_count or 'N/A'}건)")
+            #print(f"[STEP {self.current_step['step_number']}] {self.current_step['step_name']} 완료 ({elapsed:.2f}초, {result_count or 'N/A'}건)")
+            print(f"[STEP {self.current_step['step_number']}] {self.current_step['step_name']} 완료")
         
         self.steps.append(self.current_step)
         self.current_step = None

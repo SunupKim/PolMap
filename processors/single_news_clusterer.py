@@ -6,7 +6,7 @@ from processors.article_similarity_grouper import ArticleSimilarityGrouper
 from collections import defaultdict
 from datetime import datetime
 import os
-
+from utils.text_normalizer import NewsTextNormalizer
 
 class SingleNewsClusterer:
     """
@@ -36,7 +36,12 @@ class SingleNewsClusterer:
 
         # 1. 제목 기반 그룹핑 (T-번호)
         title_grouper = ArticleSimilarityGrouper(threshold=self.title_threshold, field_name="기사제목", test_mode=self.test_mode)
-        title_indices = title_grouper.group(df["title"].fillna("").tolist())
+        normalized_titles = [
+            NewsTextNormalizer.normalize_title(t)
+            for t in df["title"].fillna("").tolist()
+        ]
+        title_indices = title_grouper.group(normalized_titles)
+
         # 결과: 각 기사에 T-번호가 붙음 / 같은 T-번호 = 제목 유사
 
         # 2. 본문 기반 그룹핑 (B-번호)
@@ -203,12 +208,12 @@ class SingleNewsClusterer:
         debug_df = debug_df[reorder(cols)]
 
         # pubDate 포맷 통일
-        if "pubDate" in debug_df.columns:
-            debug_df["pubDate_local"] = (                
+        if "pubDate" in debug_df.columns:    
+            debug_df["pubDate_str"] = (
                 pd.to_datetime(debug_df["pubDate"], errors="coerce")
-                .dt.strftime("%Y-%m-%d %H:%M:%S")
+                .dt.strftime("%Y-%m-%d %H:%M:%S%z")
             )
-
+                        
         # 3. cluster_id 기준 정렬(가독성)
         if "cluster_id" in debug_df.columns:
             debug_df = debug_df.sort_values("cluster_id")
