@@ -40,3 +40,11 @@ logs/*
 !logs/aggregator/aggregation_stats.csv
 logs/aggregator/*
 
+# Web framework & dependencies
+node_modules/
+polmap-web/node_modules/
+polmap-web/.next/
+polmap-web/out/
+.turbo/
+
+

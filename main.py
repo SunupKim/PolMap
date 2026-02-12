@@ -14,9 +14,9 @@ if __name__ == "__main__":
     run_timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     current_log_dir = os.path.join("logs", f"test_{run_timestamp}")
 
-    for kw, is_required, _ in SEARCH_KEYWORDS:
+    for kw, is_required, fetch_count in SEARCH_KEYWORDS:
         try:
-            # 파이프라인 함수에 is_required 옵션을 함께 전달
-            run_news_pipeline(kw, TOTAL_FETCH_COUNT, is_required, log_dir=current_log_dir)
+            # 파이프라인 함수에 개별 fetch_count 전달
+            run_news_pipeline(kw, fetch_count, is_required, log_dir=current_log_dir)
         except Exception as e:
             print(f"!!! [{kw}] 파이프라인 실행 중 오류 발생: {e}")

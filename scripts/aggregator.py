@@ -47,7 +47,7 @@ def _load_keyword_archives(logger):
     logger.start_step("파일 로드", step_number=1)
     all_dfs = []
 
-    for kw, _, _ in SEARCH_KEYWORDS:
+    for kw, _, _ in SEARCH_KEYWORDS: # kw, is_strict, fetch_count
         path = os.path.join(OUTPUT_ROOT, kw, "selected_archive.csv")
         if not os.path.exists(path):
             continue

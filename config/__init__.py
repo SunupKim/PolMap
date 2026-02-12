@@ -5,13 +5,26 @@ from dotenv import load_dotenv
 
 from google import genai 
 from google.genai import types
+from openai import OpenAI
 
 # .env 파일 로드
 load_dotenv()
 
+# LLM 제공자 선택 (GEMINI 또는 OPENAI)
+# LLM_PROVIDER = "GEMINI"  # 기본값
+LLM_PROVIDER = "OPENAI"  # OpenAI 사용시 주석 해제  
+
+# Gemini 설정 (기존)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # Gemini API KEY
 gen_client = genai.Client(api_key=GEMINI_API_KEY)
 GEMINI_MODEL_2_5 = "gemini-2.5-flash"
+
+# OpenAI 설정 (추가)
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+OPENAI_MODEL = "gpt-4o-mini"  # 또는 "gpt-4o", "gpt-3.5-turbo" 등
+
 NORMAL_TEMPERATURE = 0.2
 
 with open("prompts/system_normal.txt", "r", encoding="utf-8") as f:
@@ -88,41 +101,32 @@ AGGREGATE_PER_HOURS = 3
 OUTPUT_ROOT = "outputs/"
 CANONICAL_ARCHIVE_PATH = os.path.join(OUTPUT_ROOT, "aggregated/canonical_archive.csv")
 
-# FETCH_PER_HOURS = 1 이상일 때만 의미 있음, 1보다 작으면 안됨.
-# IS_SAMPLE_RUN에 따라 SEARCH_KEYWORDS, TOTAL_FETCH_COUNT가 달라지므로 
-# scheduler.py, aggregator.py 모두에 영향을 미친다
-
-#IS_SAMPLE_RUN = False #실전모드
-IS_SAMPLE_RUN = True #테스트모드
+IS_SAMPLE_RUN = False #실전모드
+#IS_SAMPLE_RUN = True #테스트모드
 
 if IS_SAMPLE_RUN:
     SEARCH_KEYWORDS = [    
-        # ("이재명", False, 0.0001), # 제목에 반드시 검색어가 들어간 경우만 뽑아내려면 True
-        # ("청와대", False, 0.0001), 
-        ("조국혁신당", False, 0.001),
-        ("개혁신당", False, 0.001),
+        ("조국혁신당", False, 30),
+        ("개혁신당", False, 30),
     ]
-    TOTAL_FETCH_COUNT = 30
-else: # 여기가 실전이다
+else: 
     SEARCH_KEYWORDS = [    
-        
-        # 1그룹 : 현재는 1시간에 200건 정도 나온다 -> 2이하 필수다
-        ("이재명", False, 1), 
-        ("청와대", False, 1), 
-        ("더불어민주당", False, 1),
-        ("국민의힘", False, 1),
-        ("국회", True, 1),       # **True**
+        # 1그룹 : 대형 키워드 (최대 1000개)
+        ("이재명", False, 1000), 
+        ("청와대", False, 100), 
+        ("더불어민주당", False, 1000),
+        ("국민의힘", False, 1000),
+        ("국회", True, 1000),
 
-        # 2그룹 : 현재는 1시간에 50건 정도 나오고 있음 -> 5이하 필수다
-        ("정치권", False, 5), #정치권 키워드는 중복 기사가 거의 없이 나옴    
-        ("개혁신당", False, 5),     # False
-        ("조국혁신당", False, 5),   # False    
+        # 2그룹 : 중형 키워드
+        ("정치권", False, 300),
+        ("개혁신당", False, 300),
+        ("조국혁신당", False, 300),
 
-        # 3그룹 : 
-        ("진보당", False, 10),       # False로 하면 많게는 하루 250건도 나온다(여론조사) True로는 하루 30건 정도 -> 20 정도도 가능할 듯.
-        ("기본소득당", False, 10),
+        # 3그룹 : 소형/특수 키워드
+        ("진보당", False, 30),
+        ("기본소득당", False, 30),
     ]
-    TOTAL_FETCH_COUNT = 1000     # 검색어당 수집할 뉴스 개수, 1000개가 MAX        
 
 # 표준 컬럼 순서 (필요시 외부 모듈에서 import해서 사용)
 COLUMN_ORDER = [
@@ -143,5 +147,3 @@ CANONICAL_COLUMNS = [
     "title", "description", "link", "originallink", "content",
     # 필요시 추가 컬럼
 ]
-
-

@@ -20,7 +20,18 @@ from datetime import datetime
 from sklearn.metrics.pairwise import cosine_similarity
 from llm.issue_labeler import generate_issue_label
 from utils.dataframe_utils import canonical_df_save
-from config import CANONICAL_ARCHIVE_PATH, gen_client, GEMINI_MODEL_2_5, GEMINI_CONFIG_NORMAL
+from config import (
+    CANONICAL_ARCHIVE_PATH,
+    LLM_PROVIDER,
+    # Gemini 관련
+    gen_client,
+    GEMINI_MODEL_2_5,
+    GEMINI_CONFIG_NORMAL,
+    # OpenAI 관련
+    openai_client,
+    OPENAI_MODEL,
+    NORMAL_TEMPERATURE,
+)
 
 """
 HOURS_WINDOW
@@ -45,8 +56,9 @@ HOURS_WINDOW = 24 → 기사수 2000건 → N_CLUSTERS = 16
 N_CLUSTERS = 기사수/30 정도가 적절해 보이는데 졸라 테스트를 해봐야겠다
 """
 
-FIXED_BASE_DATE = "2026-01-25T16:30:00+09:00"  # 기준 시점 (이 시점부터 과거 N시간 치 뉴스로 이슈 판 구성)
-HOURS_WINDOW = 8  # 최근 N시간 치 뉴스로 이슈 판 구성
+FIXED_BASE_DATE = "2026-02-09T15:45:00+09:00"  # 기준 시점 (이 시점부터 과거 N시간 치 뉴스로 이슈 판 구성)
+FIXED_BASE_DATE = "2026-02-12T10:55:00+09:00"  # 기준 시점 (이 시점부터 과거 N시간 치 뉴스로 이슈 판 구성)
+HOURS_WINDOW = 12  # 최근 N시간 치 뉴스로 이슈 판 구성
 #N_CLUSTERS = 6 # 테스트할 때는 임의로 지정했지만 현재는 기사수에 따라서 main()에서 동적으로 결정된다
 
 prompt_path="prompts/general_issue_clusters.txt"
@@ -176,7 +188,7 @@ def main():
     
     # [동적 설정] 기사 수에 따라 클러스터 개수 결정 (약 40개당 1개 이슈)
     # 너무 적으면 클러스터링 의미가 없으므로 최소 2개로 설정
-    N_CLUSTERS = int(after_count / 40)
+    N_CLUSTERS = int(after_count / 20)
     if N_CLUSTERS < 2:
         N_CLUSTERS = 2
 
@@ -229,13 +241,28 @@ def main():
         for title in representative_titles:
             print(f"  - {title}")
 
-        issue_label = generate_issue_label(            
-            representative_titles,
-            gen_client=gen_client,
-            model=GEMINI_MODEL_2_5, 
-            config=GEMINI_CONFIG_NORMAL,
-            prompt_path=prompt_path,
-        )
+        # LLM 제공자에 따라 적절한 파라미터 전달
+        if LLM_PROVIDER == "GEMINI":
+            issue_label = generate_issue_label(
+                titles=representative_titles,
+                provider="GEMINI",
+                prompt_path=prompt_path,
+                gen_client=gen_client,
+                model=GEMINI_MODEL_2_5,
+                config=GEMINI_CONFIG_NORMAL,
+            )
+        elif LLM_PROVIDER == "OPENAI":
+            issue_label = generate_issue_label(
+                titles=representative_titles,
+                provider="OPENAI",
+                prompt_path=prompt_path,
+                openai_client=openai_client,
+                model=OPENAI_MODEL,
+                temperature=NORMAL_TEMPERATURE,
+            )
+        else:
+            print(f"경고: 지원하지 않는 LLM 제공자 '{LLM_PROVIDER}'. 기본 라벨 사용.")
+            issue_label = ""
 
         if not issue_label:
             issue_label = f"issue_{cid}"
@@ -265,10 +292,7 @@ def main():
         "issue_cluster_id": cluster_ids
     })
 
-    #article_issue_df.to_csv(article_issue_map_path, index=False)
-
-    
-    canonical_df_save(article_issue_df, CANONICAL_ARCHIVE_PATH)        
+    article_issue_df.to_csv(article_issue_map_path, index=False)   
 
     end_time = time.time()
     elapsed = end_time - start_time    

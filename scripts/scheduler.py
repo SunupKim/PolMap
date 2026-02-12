@@ -17,7 +17,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pipeline import run_news_pipeline
-from config import SEARCH_KEYWORDS, TOTAL_FETCH_COUNT
+from config import SEARCH_KEYWORDS, AGGREGATE_PER_HOURS
 from utils.logger import PipelineLogger, verify_file_before_write
 
 
@@ -110,7 +110,7 @@ def job():
     all_stats = []
     executed_keywords = []
 
-    for kw, is_required, fetch_per_hours in SEARCH_KEYWORDS:
+    for kw, is_required, fetch_count in SEARCH_KEYWORDS:
 
         last_time_str = last_executed.get(kw)
         should_execute = False
@@ -121,17 +121,18 @@ def job():
         else:
             last_time = datetime.strptime(last_time_str, "%Y-%m-%d %H:%M:%S")
             elapsed_hours = (now - last_time).total_seconds() / 3600
-            if elapsed_hours >= fetch_per_hours:
+            # AGGREGATE_PER_HOURS(기본 3시간) 주기로 실행
+            if elapsed_hours >= AGGREGATE_PER_HOURS:
                 should_execute = True
                 logger.add_metric(f"interval_ok_{kw}", elapsed_hours)
             else:
-                logger.add_metric(f"skipped_{kw}", f"elapsed {elapsed_hours:.1f}h < {fetch_per_hours}h")
+                logger.add_metric(f"skipped_{kw}", f"elapsed {elapsed_hours:.1f}h < {AGGREGATE_PER_HOURS}h")
 
         if not should_execute:
             continue
 
         try:
-            stats = run_news_pipeline(kw, TOTAL_FETCH_COUNT, is_required, log_dir=current_log_dir)
+            stats = run_news_pipeline(kw, fetch_count, is_required, log_dir=current_log_dir)
             if stats:
                 all_stats.append(stats)
                 executed_keywords.append(kw)
