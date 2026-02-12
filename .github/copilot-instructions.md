@@ -42,8 +42,8 @@ PolMap2는 데이터 품질(중복 제거)을 최우선으로 하는 한국 정�
   - `main.py`: 단일 키워드 테스트
 - **Logic**: `pipeline.py` (오케스트레이션), `processors/` (핵심 로직)
 - **Data Paths**:
-  - 개별 키워드: `outputs/<kw>/selected_archive.csv`
-  - 최종 결과: `outputs/aggregated/canonical_archive.csv`
+  - 개별 키워드: `archive/<kw>/selected_archive.csv`
+  - 최종 결과: `archive/aggregated/canonical_archive.csv`
   - 로그: `logs/execution_log.csv`, `logs/aggregation_stats.csv`
 
 ---

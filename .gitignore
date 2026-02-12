@@ -1,50 +1,62 @@
+# --- Environment & Dependencies ---
 .venv/
 venv/
 env/
-__pycache__/
 .env
 *.egg-info/
 build/
 dist/
+node_modules/
+polmap-web/node_modules/
 
-# outputs 디렉토리 구조
-# outputs 전체 제외
-outputs/*
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
 
-# aggregated 디렉토리만 접근 허용
-!outputs/aggregated/
+# --- Operating System ---
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# aggregated 안의 모든 파일은 다시 제외
-outputs/aggregated/*
+# --- Data & Archives (Large Files) ---
+# 모든 archive 데이터 기본 무시
+archive/*
 
-# aggregated 안의 csv만 추적
-!outputs/aggregated/*.csv
+# 하지만 전역 통합 결과물은 추적 허용
+!archive/aggregated/
+archive/aggregated/*
+!archive/aggregated/*.csv
 
-# global_similarity_test 전부 추적
-# !outputs/probe_global_similarity/
-# !outputs/probe_global_similarity/*
+# 개별 키워드 로그 데이터(simhash, similarity 등)는 명시적 제외
+archive/*/simhash_logs/
+archive/*/similarity_logs/
+archive/*/filtered_logs/
 
-# logs 디렉토리 구조
-# logs 전체 제외
+# --- Processed Data (Web Frontend) ---
+# 모든 data 무시
+data/*
+
+# 하지만 이슈 클러스터링 최신 결과물은 추적 허용 (웹 API용)
+!data/issue_clusters/
+data/issue_clusters/*
+!data/issue_clusters/current/
+!data/issue_clusters/current/*.json
+
+# --- Logs ---
 logs/*
-
-# 루트 로그 파일만 추적
 !logs/execution_log.csv
 !logs/last_executed.json
 
-# aggregator 디렉토리 접근 허용
+# Aggregator 관련 통계만 허용
 !logs/aggregator/
-!logs/aggregator/*
-
-# aggregator 안에서는 aggregation_stats.csv만 추적
-!logs/aggregator/aggregation_stats.csv
 logs/aggregator/*
+!logs/aggregator/aggregation_stats.csv
 
-# Web framework & dependencies
-node_modules/
-polmap-web/node_modules/
+# --- Web Framework (Next.js) ---
 polmap-web/.next/
 polmap-web/out/
 .turbo/
-
-
+.eslintcache

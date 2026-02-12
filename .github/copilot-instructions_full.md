@@ -74,14 +74,14 @@ cluster_id는 유사한 기사 그룹을 의미한다. 그러나 is_canonical=Tr
 - `scripts/scheduler.py` - 정기 수집 스케줄러 (무한 루프)
   - 실행: `python scripts/scheduler.py` 또는 `python -m scripts.scheduler`
   - 역할: 키워드별 실행 주기 관리, 파이프라인 호출, 실행 로그 기록
-  - 출력: `outputs/execution_log.csv` (누적 통계)
+  - 출력: `logs/execution_log.csv` (누적 통계)
 
 **통합 스크립트 (수동 실행)**
 - `scripts/aggregator.py` - 전역 뉴스 데이터 통합 및 중복 제거
   - 실행: `python scripts/aggregator.py` 또는 `python -m scripts.aggregator`
   - 역할: 모든 키워드 아카이브 병합, 링크 기준 전역 중복 제거
   - 출력: 
-    - `outputs/aggregated/canonical_archive.csv` (중복 제거된 최종본)
+    - `archive/aggregated/canonical_archive.csv` (중복 제거된 최종본)
     
 
 **핵심 함수 및 테스트 (공유 모듈)**
@@ -163,18 +163,18 @@ fetch_hours는 스케줄 주기이며 1 이상이어야 한다.
 
 ### 5. 데이터 경로 규칙
 - 키워드별 경로
-outputs/<keyword>/raw_archive.csv
-outputs/<keyword>/selected_archive.csv
-outputs/<keyword>/filtered_logs/
-outputs/<keyword>/similarity_logs/
+archive/<keyword>/raw_archive.csv
+archive/<keyword>/selected_archive.csv
+archive/<keyword>/filtered_logs/
+archive/<keyword>/similarity_logs/
 
 - 전역 경로
-outputs/aggregated/total_news_archive.csv
-outputs/aggregated/total_news_archive_meta.csv
+archive/aggregated/total_news_archive.csv
+archive/aggregated/total_news_archive_meta.csv
 
 - 상태 관리
-outputs/last_executed.json
-execution_log.csv(누적 실행 통계)
+logs/last_executed.json
+logs/execution_log.csv(누적 실행 통계)
 
 ### 6. 오류 처리 방식
 - API 및 스크래핑 오류는 로그만 남기고 처리는 계속한다. 안정성을 우선한다.
@@ -204,7 +204,7 @@ python scripts/rag_test_e5.py
 
 ### 주요 디버깅 패턴
 - 제목 유사도가 너무 높을 경우 .env에서 TITLE_THRESHOLD를 낮춘다.
-- 기사가 누락된 경우 outputs/<keyword>/filtered_logs/step*.csv에서 제외 사유를 확인한다.
+- 기사가 누락된 경우 archive/<keyword>/filtered_logs/step*.csv에서 제외 사유를 확인한다.
 - 중복 매핑 문제가 의심되면 total_news_archive_meta.csv와 duplicate_removal_history.csv를 확인한다.
 - 스크래핑 실패 시 NewsScraper의 재시도 로직과 타임아웃(기본 0.1초 지연)을 점검한다.
 
@@ -212,7 +212,7 @@ python scripts/rag_test_e5.py
 - execution_log.csv: 키워드별 실행 통계(new_raw, final_added, timestamp)
 - <keyword>/filtered_logs/stepN_*.csv: 필터 단계별 기사 제외 사유
 - <keyword>/similarity_logs/YYYYMMDD_HHMM.csv: 상세 클러스터 할당 결과, 키워드별 클러스터링 로직은 이 파일을 보면 알 수 있다
-- outputs/last_executed.json: 키워드별 마지막 실행 시각
+- logs/last_executed.json: 키워드별 마지막 실행 시각
 
 ## 연동 지점 및 외부 의존성
 
@@ -238,7 +238,7 @@ python scripts/rag_test_e5.py
 
 1. NewsFilter에 메서드를 추가한다. 예: apply_custom_filter()
 2. main.py 파이프라인에서 5단계와 6단계 사이에 호출한다.
-3. 제외된 기사는 outputs/<keyword>/filtered_logs/stepN_*.csv에 기록한다.
+3. 제외된 기사는 archive/<keyword>/filtered_logs/stepN_*.csv에 기록한다.
 4. README.md의 테이블을 갱신한다.
 
 ### 새 클러스터링 방식 추가
