@@ -106,7 +106,7 @@ NAVER_SECRET = os.getenv("NAVER_SECRET")
 # BASE_OUTPUT_PATH = "outputs" # 레거시
 
 # [수집에서 제외할 제목 단어]
-EXCLUDE_WORDS_STR = " 포토, 헤드라인, [사진], [영상], [화보], [그래픽], 톱뉴스, [오늘의 주요일정], [투데이 라인업], [프로필]"
+EXCLUDE_WORDS_STR = " 포토, 헤드라인, [사진], [영상], [화보], [그래픽], 톱뉴스, [오늘의 주요일정], [투데이 라인업], [프로필], [부고]"
 
 # 수집 주기
 AGGREGATE_PER_HOURS = 3

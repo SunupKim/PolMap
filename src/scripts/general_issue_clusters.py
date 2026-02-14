@@ -1,10 +1,11 @@
-# RULE: 디버그 로그(print) 및 주석 삭제 금지.
-# scripts/general_issue_clusters.py
-
-# 임베딩은 기사 자체의 좌표(누적)고 클러스터링은 특정 시간창에서 그 좌표들로 ‘이슈 지도’를 다시 그리는 작업
-# 정치 뉴스라는 거대한 책더미를 내용별로 12개(N_CLUSTERS)의 바구니에 나누어 담는 작업을 자동화
-# 실행 방법: python -m src.scripts.general_issue_clusters
-# 임베딩 → KMeans로 클러스터링 → 대표기사 선택 → LLM 통해 라벨링
+"""
+RULE: 디버그 로그(print) 및 주석 삭제 금지.
+scripts/general_issue_clusters.py
+임베딩은 기사 자체의 좌표(누적)고 클러스터링은 특정 시간창에서 그 좌표들로 ‘이슈 지도’를 다시 그리는 작업
+정치 뉴스라는 거대한 책더미 속에서 밀도가 높은(유사한 내용이 모인) 영역을 찾아 자동으로 이슈 그룹화
+실행 방법: python -m src.scripts.general_issue_clusters
+임베딩 → HDBSCAN(밀도 기반 클러스터링) → 노이즈 제거 → 대표기사 선택 → LLM 라벨링
+"""
 
 import os
 import json
@@ -12,25 +13,22 @@ import pickle
 import pandas as pd
 import numpy as np
 import time
-#from pathlib import Path
+from datetime import datetime
 
 from sentence_transformers import SentenceTransformer
-from sklearn.cluster import KMeans
-from datetime import datetime
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import HDBSCAN
 from sklearn.metrics.pairwise import cosine_similarity
+
 from src.llm.issue_labeler import generate_issue_label
-#from src.utils.dataframe_utils import canonical_df_save
-from src.config import (
-    #ROOT_DIR,
+from src.config import (    
     DATA_DIR,
     PROMPTS_DIR,
     CANONICAL_ARCHIVE_PATH,
-    LLM_PROVIDER,
-    # Gemini 관련
+    LLM_PROVIDER,    
     gen_client,
     GEMINI_MODEL_2_5,
-    GEMINI_CONFIG_NORMAL,
-    # OpenAI 관련
+    GEMINI_CONFIG_NORMAL,    
     openai_client,
     OPENAI_MODEL,
     NORMAL_TEMPERATURE,
@@ -42,37 +40,52 @@ HOURS_WINDOW
 의미: 이슈 판을 구성할 때 포함할 뉴스의 시간 범위(최근 N시간)
 역할: 어떤 이슈가 '현재의 정치 이슈'로 취급되는지를 결정
 성격: 설계 결정값(판의 시간적 경계)
-주의: 이 값을 변경하면 이슈 클러스터 전체를 재생성해야 한다
 
-N_CLUSTERS
-의미: 이슈 클러스터 개수 K
-역할: 정치판을 몇 개의 이슈 공간으로 나눌지 결정
-성격: 설계 결정값이지, 모델 파라미터가 아니다
-왜 필요한가: KMeans는 반드시 K를 알아야 한다. 
-원칙: 테스트 중에는 바꿔도 되지만 한 번 고정하면 덮어쓰지 않는다. 바꾸는 순간 판이 바뀐 것으로 취급한다.
-권장값 연구: 기사수 350개 -> 12, 500개 -> 20 
-테스트 
-HOURS_WINDOW = 8 → 기사수 350 → N_CLUSTERS = 12 적절
-HOURS_WINDOW = 8 → 기사수 350~650 → N_CLUSTERS = ?
-HOURS_WINDOW = 12 → 기사수 700~1300건 → N_CLUSTERS = 16
-HOURS_WINDOW = 24 → 기사수 2000건 → N_CLUSTERS = 16
-하루 뉴스는 약 2000건 정도?
-N_CLUSTERS = 기사수/30 정도가 적절해 보이는데 졸라 테스트를 해봐야겠다
+MIN_CLUSTER_SIZE
+의미: 하나의 독립된 '이슈'로 인정하기 위한 최소 기사 수 
+역할: 클러스터의 최소 크기를 결정. 이보다 작은 모임은 노이즈(-1)로 분류됨
+주의: 너무 낮으면 파편화된 이슈가 많아지고, 너무 높으면 중요한 소수 기사 이슈가 묻힘
+
+MIN_SAMPLES
+의미: 클러스터 형성을 위한 핵심 포인트 주변의 이웃 수
+역할: 클러스터링의 '보수성'을 결정. 값이 커질수록 노이즈 분류가 엄격해짐
+주의: 이 값이 커지면 군집 경계에 있는 기사들이 대거 노이즈로 빠질 수 있음
+
+왜 HDBSCAN인가: 
+1. 이슈의 개수(K)를 미리 정할 필요 없이 데이터 밀도에 따라 자동 결정
+2. 어떤 이슈에도 속하지 않는 기사를 노이즈(-1)로 분리하여 클러스터 순도 향상
+3. 모양이 불규칙한 이슈 군집도 효과적으로 포착 가능
 """
 
-FIXED_BASE_DATE = "2026-02-12T16:20:00+09:00"  # 기준 시점
+DISABLE_LLM_FOR_TEST = True  # 테스트 시 True, 운영 시 False
+FIXED_BASE_DATE = None #None이면 현재 시각으로 테스트한다.
+#FIXED_BASE_DATE = "2026-02-14T06:00:00+09:00"
 
-HOURS_WINDOW = 16  # 최근 N시간 치 뉴스로 이슈 판 구성
+HOURS_WINDOW = 12  # 최근 N시간 치 뉴스로 이슈 판 구성
+
+# 아래 2개 값의 조합이 가장 중요하다. (3,3) (3,4) (4,3) (4,4)
+MIN_CLUSTER_SIZE = 3
+MIN_SAMPLES  = 4
+
+"""
+2026-02-14 16:42:15 | 2026-02-13 11:20:51  테스트 결과 (3,4)가 가장 마음에 든다
+2026-02-14 17:02:23 | 2026-02-14 17:02:11  테스트 결과는 (3,3)만 적절하다ㅠ
+
+"""
 
 # 경로 설정
 PROMPT_PATH = PROMPTS_DIR / "general_issue_clusters.txt"
 ISSUE_CLUSTERS_ROOT = DATA_DIR / "issue_clusters"
 ARTICLE_EMBEDDINGS_CACHE = ISSUE_CLUSTERS_ROOT / "embeddings_cache.pkl"
+EXPERIMENT_LOG_PATH = ISSUE_CLUSTERS_ROOT / "clustering_experiments.log"
+
 
 # 웹 서비스용 최신 데이터 경로
 CURRENT_ISSUE_DIR = ISSUE_CLUSTERS_ROOT / "current"
 
 MODEL_NAME = "dragonkue/multilingual-e5-small-ko-v2"
+# MODEL_NAME = "intfloat/multilingual-e5-base"
+
 RANDOM_STATE = 42
 
 def build_corpus(df: pd.DataFrame):
@@ -81,7 +94,20 @@ def build_corpus(df: pd.DataFrame):
 
     for _, row in df.iterrows():
         content = str(row.get("content", ""))
-        text = f"passage: {row['title']} {content}"
+
+        if MODEL_NAME == "dragonkue/multilingual-e5-small-ko-v2":            
+            #text = f"{row['title']}"            
+            text = f"{row['title']} {content[:300]}"
+            #text = f"{row['title']} {content[:500]}"
+            #text = f"passage: {row['title']} {content}"
+
+        elif MODEL_NAME == "intfloat/multilingual-e5-base":
+            text = f"{row['title']} {content[:500]}"
+
+        else:
+            print("모델을 찾을 수 없습니다")
+            return
+
         texts.append(text)
         article_ids.append(row["news_id"])
 
@@ -172,44 +198,42 @@ def main():
     issue_centers_path = os.path.join(current_output_dir, "centers.json")
     issue_meta_path = os.path.join(current_output_dir, "meta.json")
     article_issue_map_path = os.path.join(current_output_dir, "article_map.csv")
-
+    
     # === 기준 날짜 및 시간 설정 (이 시점부터 과거 N시간을 추적) ===
     # 1. 날짜 데이터 전처리 (시간대 유지)    
     # 방법: 모두 KST(Asia/Seoul)로 통일하여 비교
-    df["pubDate"] = pd.to_datetime(df["pubDate"], errors="coerce").dt.tz_convert('Asia/Seoul')
-    base_timestamp = pd.Timestamp.now(tz='Asia/Seoul')
     
+    df["pubDate"] = pd.to_datetime(df["pubDate"], errors="coerce").dt.tz_convert('Asia/Seoul')  
     # [디버그용] 데이터셋의 실제 시간 범위 출력
     print(f"데이터셋 시간 범위: {df['pubDate'].min()} ~ {df['pubDate'].max()}")
-
-    # 데이터의 시간대 정보와 동기화
+    
     # 2. 현재 시각을 기사 데이터와 동일한 타임존(+0900)으로 생성
     # pd.Timestamp.now()에 tz 정보를 추가하여 데이터와 비교 가능하게 만듭니다.
-    base_timestamp = pd.Timestamp.now(tz='Asia/Seoul')
+        
+    # === 기준 날짜 및 시간 설정 부분 ===
+    if FIXED_BASE_DATE is not None:
+        print(f"FIXED_BASE_DATE를 사용합니다 =>", {FIXED_BASE_DATE})
+        # ISO 형식을 명확히 파싱
+        base_timestamp = pd.to_datetime(FIXED_BASE_DATE)
+        if base_timestamp.tzinfo is None:
+            base_timestamp = base_timestamp.tz_localize("Asia/Seoul")
+        else:
+            base_timestamp = base_timestamp.tz_convert("Asia/Seoul")
+    else:
+        base_timestamp = pd.Timestamp.now(tz='Asia/Seoul')
 
-    # 고정 기준 시점 사용시 주석 해제
-    #base_timestamp = pd.to_datetime(FIXED_BASE_DATE)
-    
-    # HOURS_WINDOW 거리만큼 과거 시점 계산
+    # 구간 계산 로그 출력 (매우 중요)
     cutoff_date = base_timestamp - pd.Timedelta(hours=HOURS_WINDOW)
+    print(f"--- 필터링 디버그 ---")
+    print(f"설정된 기준시: {base_timestamp}")
+    print(f"윈도우 시작시: {cutoff_date}")
 
     before_count = len(df)
     df_filtered = df[(df["pubDate"] >= cutoff_date) & (df["pubDate"] <= base_timestamp)].copy()
     after_count = len(df_filtered)
-    
-    # [동적 설정] 기사 수에 따라 클러스터 개수 결정 (약 40개당 1개 이슈)
-    # 너무 적으면 클러스터링 의미가 없으므로 최소 2개로 설정
-    N_CLUSTERS = int(after_count / 20)
-    if N_CLUSTERS < 2:
-        N_CLUSTERS = 2
 
-    print(f"기사 수 변화: {before_count} → {after_count} (기준: {FIXED_BASE_DATE}, 최근 {HOURS_WINDOW}시간), N_CLUSTERS={N_CLUSTERS}")
+    print(f"기사 수 변화: {before_count} → {after_count} (최근 {HOURS_WINDOW}시간)")
 
-    if after_count < N_CLUSTERS:
-        print(f"경고: 필터링된 기사 수({after_count})가 클러스터 수({N_CLUSTERS})보다 적습니다.")
-        # 필요한 경우 여기서 return 하거나 N_CLUSTERS를 조정하는 로직을 넣을 수 있습니다.
-        return
-      
     ############# 이슈 클러스터링 본체 ###############
     # 기사 제목 리스트 확보 (중요)
     # 5. [중요] 필터링된 데이터셋으로 코퍼스와 제목 리스트 재구성
@@ -220,18 +244,68 @@ def main():
     #embeddings = load_or_create_embeddings(texts)
     embeddings = create_embeddings(texts)
     
-    kmeans = KMeans(
-        n_clusters=N_CLUSTERS,
-        random_state=RANDOM_STATE,
-        n_init="auto"
+    clusterer = HDBSCAN(
+        min_cluster_size=MIN_CLUSTER_SIZE,   # 최소 MIN_CLUSTER_SIZE개의 기사는 있어야 군집으로 인정
+        min_samples=MIN_SAMPLES,
+        metric="cosine",                                     # 임베딩 정합
+        copy=False  
     )
-    cluster_ids = kmeans.fit_predict(embeddings)
 
-    print("클러스터링 완료→클러스터 중심 계산 및 라벨 생성")
+    cluster_ids = clusterer.fit_predict(embeddings)    
+    print(f"HDBSCAN 파라미터 → min_cluster_size={MIN_CLUSTER_SIZE}, min_samples={MIN_SAMPLES}")
+
+    #=============== HDBSCAN을 위한 점수 계산
+
+    unique_all = set(cluster_ids)
+    n_clusters = len([l for l in unique_all if l != -1])
+    n_noise = int(np.sum(cluster_ids == -1))
+    noise_ratio = (n_noise / len(cluster_ids)) * 100   
+
+    # 실루엣 점수 계산
+    valid_mask = cluster_ids != -1
+    unique_labels = set(cluster_ids[valid_mask])
+    score = 0.0
+    if valid_mask.sum() >= 2 and len(unique_labels) >= 2:
+        score = silhouette_score(embeddings[valid_mask], cluster_ids[valid_mask], metric="cosine")
+    
+    # 결과 출력
+    print(f"HDBSCAN 결과 → 군집 수: {n_clusters}, 노이즈 기사 수: {n_noise} ({noise_ratio:.1f}%)")
+    if score > 0:
+        print(f"★ 실루엣 점수: {score:.4f}")
+
+    # ================= LOG 파일 기록 추가 (들여쓰기 밖으로 이동) =================
+    log_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "base_date": base_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        "total_articles": len(texts), # 하나만 남김
+        "silhouette_score": f"{score:.4f}"
+    }
+
+    os.makedirs(ISSUE_CLUSTERS_ROOT, exist_ok=True)
+    
+    file_exists = os.path.isfile(EXPERIMENT_LOG_PATH)
+    with open(EXPERIMENT_LOG_PATH, "a", encoding="utf-8") as f:
+        if not file_exists:
+            # 헤더와 데이터 컬럼 순서를 일치시킴
+            f.write("      Time       |       BaseDate       | Size | Samples | Total | Clusters | Noise(%) | Silhouette | Model\n")               
+
+            f.write("-" * 120 + "\n")
+        
+        # f-string 공백을 조절하여 표 형태 유지
+        log_line = (f"{log_entry['timestamp']} | {log_entry['base_date']} | "
+                    f"{MIN_CLUSTER_SIZE:^4} | {MIN_SAMPLES:^4} | {log_entry['total_articles']:^5} | "
+                    f"{n_clusters:^5} | {n_noise:>3}({noise_ratio:>4.1f}%) | "
+                    f"{log_entry['silhouette_score']:^5} | {MODEL_NAME[:12]}\n")
+        f.write(log_line)  
+    
+    # =======================================================
+
+  
     issue_centers = []   # 기계용
     issue_meta = []      # 사람용
 
-    for cid in range(N_CLUSTERS):
+    valid_labels = sorted([l for l in set(cluster_ids) if l != -1])
+    for cid in valid_labels:
         idxs = np.where(cluster_ids == cid)[0]
         if len(idxs) == 0:
             continue
@@ -252,28 +326,31 @@ def main():
         for title in representative_titles:
             print(f"  - {title}")
 
+        if DISABLE_LLM_FOR_TEST:
+            issue_label = f"issue_{cid}"  # 테스트용 더미 라벨
         # LLM 제공자에 따라 적절한 파라미터 전달
-        if LLM_PROVIDER == "GEMINI":
-            issue_label = generate_issue_label(
-                titles=representative_titles,
-                provider="GEMINI",
-                prompt_path=str(PROMPT_PATH),
-                gen_client=gen_client,
-                model=GEMINI_MODEL_2_5,
-                config=GEMINI_CONFIG_NORMAL,
-            )
-        elif LLM_PROVIDER == "OPENAI":
-            issue_label = generate_issue_label(
-                titles=representative_titles,
-                provider="OPENAI",
-                prompt_path=str(PROMPT_PATH),
-                openai_client=openai_client,
-                model=OPENAI_MODEL,
-                temperature=NORMAL_TEMPERATURE,
-            )
-        else:
-            print(f"경고: 지원하지 않는 LLM 제공자 '{LLM_PROVIDER}'. 기본 라벨 사용.")
-            issue_label = ""
+        else :
+            if LLM_PROVIDER == "GEMINI":
+                issue_label = generate_issue_label(
+                    titles=representative_titles,
+                    provider="GEMINI",
+                    prompt_path=str(PROMPT_PATH),
+                    gen_client=gen_client,
+                    model=GEMINI_MODEL_2_5,
+                    config=GEMINI_CONFIG_NORMAL,
+                )
+            elif LLM_PROVIDER == "OPENAI":
+                issue_label = generate_issue_label(
+                    titles=representative_titles,
+                    provider="OPENAI",
+                    prompt_path=str(PROMPT_PATH),
+                    openai_client=openai_client,
+                    model=OPENAI_MODEL,
+                    temperature=NORMAL_TEMPERATURE,
+                )
+            else:
+                print(f"경고: 지원하지 않는 LLM 제공자 '{LLM_PROVIDER}'. 기본 라벨 사용.")
+                issue_label = ""
 
         if not issue_label:
             issue_label = f"issue_{cid}"
